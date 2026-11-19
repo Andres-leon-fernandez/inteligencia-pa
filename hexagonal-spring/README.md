@@ -19,7 +19,7 @@ Set-Location hexagonal-spring
 .\mvnw.cmd -DskipTests package
 ```
 
-El artefacto resultante queda en `target/inteligencia-pa-api-0.0.1-SNAPSHOT.jar`. También puedes iniciar la API en Windows ejecutando `run-api.bat`.
+Maven genera `target/inteligencia-pa-api-0.0.1-SNAPSHOT.jar`. El ejecutable distribuible incluido en el repositorio está en `dist/inteligencia-pa-api.jar`. En Windows, `run-api.bat` usa el artefacto de `target` si existe; si no, ejecuta el JAR de `dist`.
 
 Con la API iniciada, abre `http://localhost:8080/` para usar el dashboard.
 
