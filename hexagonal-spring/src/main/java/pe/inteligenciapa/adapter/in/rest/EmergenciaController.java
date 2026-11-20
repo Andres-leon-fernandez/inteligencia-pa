@@ -41,9 +41,12 @@ public class EmergenciaController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
             @RequestParam(defaultValue = "0") int pagina,
-            @RequestParam(defaultValue = "20") int tamano) {
+            @RequestParam(defaultValue = "20") int tamano,
+            @RequestParam(defaultValue = "fecha") String ordenarPor,
+            @RequestParam(defaultValue = "desc") String direccion) {
         FiltroEmergencias filtro = new FiltroEmergencias(
-                departamento, provincia, distrito, estado, evento, red, busqueda, desde, hasta, pagina, tamano);
+                departamento, provincia, distrito, estado, evento, red, busqueda, desde, hasta,
+                pagina, tamano, ordenarPor, direccion);
         PaginaResultado<EmergenciaVial> resultado = buscarEmergencias.buscar(filtro);
         return new PaginaResponse<>(
                 resultado.contenido().stream().map(EmergenciaRestMapper::toResponse).toList(),

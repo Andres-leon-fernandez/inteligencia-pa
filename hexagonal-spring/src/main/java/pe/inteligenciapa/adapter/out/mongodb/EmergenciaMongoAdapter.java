@@ -2,8 +2,10 @@ package pe.inteligenciapa.adapter.out.mongodb;
 
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.bson.Document;
@@ -38,7 +40,13 @@ public class EmergenciaMongoAdapter implements EmergenciaVialQueryPort, Indicado
         Query query = crearConsulta(filtros(filtro));
         long total = mongoTemplate.count(query, EmergenciaMongoDocument.class);
 
-        query.with(Sort.by(Sort.Direction.DESC, "fecha_ocurrencia"));
+        String campo = Map.of(
+                "fecha", "fecha_ocurrencia",
+                "estado", "estado_actual",
+                "departamento", "departamento",
+                "evento", "evento").get(filtro.ordenarPor());
+        Sort.Direction direccion = "asc".equals(filtro.direccion()) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        query.with(Sort.by(direccion, campo).and(Sort.by(Sort.Direction.ASC, "id_emergencia")));
         query.skip((long) filtro.pagina() * filtro.tamano());
         query.limit(filtro.tamano());
 
@@ -65,14 +73,29 @@ public class EmergenciaMongoAdapter implements EmergenciaVialQueryPort, Indicado
         List<Criteria> condiciones = criteriosFechas(desde, hasta);
         Query query = crearConsulta(condiciones);
         long total = mongoTemplate.count(query, EmergenciaMongoDocument.class);
+        Criteria conFecha = Criteria.where("fecha_ocurrencia").ne(null);
+        EmergenciaMongoDocument primera = mongoTemplate.findOne(
+                Query.query(conFecha).with(Sort.by(Sort.Direction.ASC, "fecha_ocurrencia")),
+                EmergenciaMongoDocument.class, EmergenciaMongoDocument.COLLECTION);
+        EmergenciaMongoDocument ultima = mongoTemplate.findOne(
+                Query.query(conFecha).with(Sort.by(Sort.Direction.DESC, "fecha_ocurrencia")),
+                EmergenciaMongoDocument.class, EmergenciaMongoDocument.COLLECTION);
 
         return new ResumenIndicadores(
                 desde,
                 hasta,
+                aFechaLocal(primera),
+                aFechaLocal(ultima),
                 total,
                 agrupar(condiciones, "estado_actual"),
                 agrupar(condiciones, "departamento"),
                 agrupar(condiciones, "evento"));
+    }
+
+    private LocalDate aFechaLocal(EmergenciaMongoDocument documento) {
+        return documento == null || documento.fechaOcurrencia() == null
+                ? null
+                : Instant.ofEpochMilli(documento.fechaOcurrencia().getTime()).atZone(ZoneOffset.UTC).toLocalDate();
     }
 
     private List<Criteria> filtros(FiltroEmergencias filtro) {

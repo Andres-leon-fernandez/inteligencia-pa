@@ -2,7 +2,7 @@
 
 ## Alcance de esta fase
 
-API REST de solo lectura para consultar emergencias viales del MTC almacenadas en MongoDB. El CSV se carga con el script Python existente. La interfaz HTML/CSS/JavaScript será una fase posterior.
+API REST de solo lectura y dashboard HTML/CSS/JavaScript para consultar emergencias viales del MTC almacenadas en MongoDB. El CSV se valida, normaliza e importa con `scripts/importar_emergencias.py` desde la raíz del repositorio.
 
 La aplicación es un monolito modular Spring Boot. El dominio no depende de Spring, MongoDB, HTTP ni CSV. Las dependencias apuntan al núcleo:
 
@@ -75,11 +75,11 @@ El controlador REST recibe HTTP, crea modelos de consulta y llama a un puerto de
 
 ## Endpoints implementados
 
-- `GET /api/v1/emergencias`: búsqueda paginada. Filtros opcionales: `departamento`, `provincia`, `distrito`, `estado`, `evento`, `red`, `busqueda`, `desde` y `hasta`. `busqueda` busca por ID, evento, ubicación, vía y descripciones. Parámetros de página: `pagina` (inicia en 0) y `tamano` (1 a 100, por defecto 20). Orden por fecha de ocurrencia descendente.
+- `GET /api/v1/emergencias`: búsqueda paginada. Filtros opcionales: `departamento`, `provincia`, `distrito`, `estado`, `evento`, `red`, `busqueda`, `desde` y `hasta`. `busqueda` busca por ID, evento, ubicación, vía y descripciones. Parámetros de página: `pagina` (inicia en 0) y `tamano` (1 a 100, por defecto 20). Orden: `ordenarPor` acepta `fecha`, `estado`, `departamento` o `evento`; `direccion` acepta `asc` o `desc`. Valores por defecto: `fecha` y `desc`. El adaptador usa una lista permitida de campos de Mongo.
 - `GET /api/v1/emergencias/{idEmergencia}`: detalle por ID; devuelve 404 si no existe.
-- `GET /api/v1/indicadores/resumen?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`: total de reportes y conteos por estado, departamento y evento. Las fechas son opcionales.
+- `GET /api/v1/indicadores/resumen?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`: total de reportes y conteos por estado, departamento y evento. Las fechas son opcionales. También devuelve `fechaInicialDatos` y `fechaMaximaDatos`, calculadas sobre la colección completa para que el dashboard inicialice el filtro de fechas con el rango realmente disponible.
 
-Los indicadores cuentan reportes, no personas. El campo `estadoActual` es el último estado del archivo al `fechaCorte`, no necesariamente el estado vial actual. No se calcula un nivel de riesgo oficial ni se predicen eventos.
+Los indicadores cuentan reportes, no personas. El campo `estadoActual` es el último estado del archivo al `fechaCorte`, no necesariamente el estado vial actual. El ranking geográfico representa concentración de reportes y no mide el riesgo. No se predicen eventos.
 
 ## MongoDB y configuración
 
@@ -92,4 +92,4 @@ Spring Boot 4.1.2 usa Java 21 y Spring Data MongoDB para la persistencia. Spring
 
 ## Estado
 
-Se generó el esqueleto Maven con Maven Wrapper y se implementaron dominio, aplicación, adaptador REST, adaptador Mongo, dashboard y configuración. El JAR se compila con `-DskipTests`; no se incluyeron ni ejecutaron pruebas automatizadas.
+Se implementaron el dominio, aplicación, adaptadores REST y Mongo, dashboard y configuración. El dashboard separa panel general y tabla de emergencias, permite paginar, ordenar, elegir el tamaño de página y alternar tema claro/oscuro. El JAR se puede construir con Maven Wrapper; el proyecto no incluye pruebas automatizadas en esta fase.

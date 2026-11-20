@@ -5,7 +5,7 @@
     emergencies: '/api/v1/emergencias',
     summary: '/api/v1/indicadores/resumen'
   };
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 20;
   const STATE_COLORS = {
     INTERRUMPIDO: '#dc5e5b',
     RESTRINGIDO: '#dfaa42',
@@ -17,6 +17,10 @@
     pageSize: PAGE_SIZE,
     totalPages: 0,
     totalElements: 0,
+    sortBy: 'fecha',
+    sortDirection: 'desc',
+    fechaInicialDatos: '',
+    fechaMaximaDatos: '',
     cutoff: null,
     allSummary: null,
     debounce: null
@@ -182,16 +186,23 @@
     const total = Number(summary.totalReportes || 0);
     const interrupted = statusCount(summary, 'INTERRUMPIDO');
     const restricted = statusCount(summary, 'RESTRINGIDO');
+    const leadingArea = [...(summary.porDepartamento || [])]
+      .filter((item) => item.categoria)
+      .sort((a, b) => Number(b.cantidad || 0) - Number(a.cantidad || 0))[0];
     if (!total) {
       $('#insight-title').textContent = 'Sin reportes en este periodo';
       $('#insight-copy').textContent = 'Prueba otro rango de fechas o limpia el filtro para volver a consultar todos los reportes disponibles.';
+      $('#decision-copy').textContent = 'No hay registros para este periodo. Amplía las fechas para comparar departamentos.';
       return;
     }
     const share = ((interrupted / total) * 100).toFixed(1);
     $('#insight-title').textContent = interrupted
-      ? `${formatNumber(interrupted)} reportes figuran interrumpidos`
+      ? `${formatNumber(interrupted)} reporte${interrupted === 1 ? '' : 's'} con vía interrumpida`
       : 'No hay reportes interrumpidos';
-    $('#insight-copy').textContent = `${share}% de los ${formatNumber(total)} reportes del periodo aparecen como interrumpidos al corte de la fuente. ${formatNumber(restricted)} figuran como restringidos.`;
+    $('#insight-copy').textContent = `${formatNumber(restricted)} reportes figuran restringidos. Los estados corresponden al corte de la fuente y no confirman la condición de la vía hoy.`;
+    $('#decision-copy').textContent = leadingArea
+      ? `${leadingArea.categoria} concentra ${formatNumber(leadingArea.cantidad)} de ${formatNumber(total)} reportes (${((Number(leadingArea.cantidad) / total) * 100).toFixed(1)}%), el mayor volumen entre departamentos en este periodo. Conviene revisar sus registros y estados para orientar la atención; el conteo no representa por sí solo un riesgo oficial.`
+      : 'No hay un departamento destacado para este periodo. Filtra la tabla por estado para revisar las afectaciones reportadas.';
   }
 
   function renderSummary(summary) {
@@ -204,7 +215,7 @@
     const periodText = range.desde || range.hasta
       ? `${range.desde ? formatDate(range.desde) : 'Inicio'} — ${range.hasta ? formatDate(range.hasta) : 'Hoy'}`
       : 'Todo el periodo disponible';
-    $('#table-count').textContent = `${periodText} · indicadores basados en reportes registrados`;
+    $('#table-count').textContent = `${periodText} · cifras basadas en reportes del MTC`;
   }
 
   function populateOptions(select, items, defaultLabel) {
@@ -254,9 +265,13 @@
     $('#page-summary').textContent = state.totalElements
       ? `Mostrando ${formatNumber(start)}–${formatNumber(end)} de ${formatNumber(state.totalElements)} reportes`
       : '0 reportes';
-    $('#page-number').textContent = state.totalPages ? `${state.page + 1} / ${state.totalPages}` : '0 / 0';
+    $('#page-input').value = state.totalPages ? state.page + 1 : 0;
+    $('#page-input').max = Math.max(1, state.totalPages);
+    $('#page-total').textContent = `/ ${state.totalPages}`;
     $('#previous-page').disabled = state.page <= 0 || state.totalPages === 0;
     $('#next-page').disabled = state.page + 1 >= state.totalPages;
+    $('#first-page').disabled = state.page <= 0 || state.totalPages === 0;
+    $('#last-page').disabled = state.page + 1 >= state.totalPages || state.totalPages === 0;
 
     if (rows.length && rows[0].fechaCorte) {
       state.cutoff = rows[0].fechaCorte;
@@ -273,7 +288,9 @@
       evento: $('#event-filter').value,
       busqueda: $('#search-text').value.trim(),
       pagina: state.page,
-      tamano: state.pageSize
+      tamano: state.pageSize,
+      ordenarPor: state.sortBy,
+      direccion: state.sortDirection
     };
   }
 
@@ -296,8 +313,16 @@
       const summary = await getJson(summaryUrl);
       if (reloadOptions) {
         state.allSummary = summary;
+        state.fechaInicialDatos = summary.fechaInicialDatos || '';
+        state.fechaMaximaDatos = summary.fechaMaximaDatos || '';
+        $('#date-from').min = state.fechaInicialDatos;
+        $('#date-from').max = state.fechaMaximaDatos;
+        $('#date-to').min = state.fechaInicialDatos;
+        $('#date-to').max = state.fechaMaximaDatos;
+        if (!$('#date-from').value) $('#date-from').value = state.fechaInicialDatos;
+        if (!$('#date-to').value) $('#date-to').value = state.fechaMaximaDatos;
         populateFilterOptions(summary);
-        await loadSummary();
+        renderSummary(summary);
       } else {
         renderSummary(summary);
       }
@@ -345,30 +370,99 @@
       statusLine.append(badgeSlot.firstElementChild);
       container.append(statusLine);
 
+      const hero = document.createElement('div');
+      hero.className = 'detail-hero';
+      const title = document.createElement('h3');
+      title.textContent = item.evento || 'Emergencia vial';
+      const place = document.createElement('p');
+      place.textContent = [location.distrito, location.provincia, location.departamento].filter(Boolean).join(' · ') || 'Ubicación no informada';
+      const road = document.createElement('span');
+      road.textContent = [item.redAfectada, item.tramoAfectado].filter(Boolean).join(' · ') || 'Vía no informada';
+      hero.append(title, place, road);
+      container.append(hero);
+
       const grid = document.createElement('div');
-      grid.className = 'detail-grid';
-      addDetailField(grid, 'Evento', item.evento);
-      addDetailField(grid, 'Fenómeno', item.fenomeno);
-      addDetailField(grid, 'Fecha de ocurrencia', formatDate(item.fechaOcurrencia));
-      addDetailField(grid, 'Fecha de cierre', formatDate(item.fechaCierre));
-      addDetailField(grid, 'Departamento', location.departamento);
-      addDetailField(grid, 'Provincia / distrito', [location.provincia, location.distrito].filter(Boolean).join(' / '));
-      addDetailField(grid, 'Carretera', item.redAfectada);
-      addDetailField(grid, 'Tramo', item.tramoAfectado);
-      addDetailField(grid, 'Sector afectado', item.sectorAfectado);
-      addDetailField(grid, 'Coordenadas', coordinates);
-      addDetailField(grid, 'Afectación reportada', item.afectacion, true);
-      addDetailField(grid, 'Hechos', item.hechos, true);
-      addDetailField(grid, 'Novedades', item.novedades, true);
-      addDetailField(grid, 'Fuente del reporte', item.fuente, true);
-      addDetailField(grid, 'Fecha de corte de los datos', formatDate(item.fechaCorte), true);
+      grid.className = 'detail-explanations';
+      const addExplanation = (label, meaning, value, kind) => {
+        const block = document.createElement('section');
+        block.className = `detail-explanation ${kind}`;
+        const heading = document.createElement('h3');
+        heading.textContent = label;
+        const caption = document.createElement('p');
+        caption.className = 'detail-meaning';
+        caption.textContent = meaning;
+        const content = document.createElement('p');
+        content.className = 'detail-value';
+        content.textContent = value || 'El reporte no incluye este dato.';
+        block.append(heading, caption, content);
+        grid.append(block);
+      };
+      addExplanation('A · ¿Qué parte de la vía está afectada?', 'Ubica la infraestructura o el tramo señalado en el reporte.', item.afectacion || [item.redAfectada, item.tramoAfectado, item.sectorAfectado].filter(Boolean).join(' · '), 'affectation');
+      addExplanation('B · ¿Qué ocurrió y qué impacto tuvo?', 'Resume el evento y cómo afectó la transitabilidad, según el reporte.', item.hechos, 'facts');
       container.append(grid);
+
+      const more = document.createElement('details');
+      more.className = 'detail-more';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Ver datos complementarios';
+      more.append(summary);
+      const extra = document.createElement('div');
+      extra.className = 'detail-grid';
+      addDetailField(extra, 'Fenómeno', item.fenomeno);
+      addDetailField(extra, 'Fecha de ocurrencia', formatDate(item.fechaOcurrencia));
+      addDetailField(extra, 'Fecha de cierre', formatDate(item.fechaCierre));
+      addDetailField(extra, 'Departamento', location.departamento);
+      addDetailField(extra, 'Provincia / distrito', [location.provincia, location.distrito].filter(Boolean).join(' / '));
+      addDetailField(extra, 'Carretera', item.redAfectada);
+      addDetailField(extra, 'Tramo', item.tramoAfectado);
+      addDetailField(extra, 'Sector afectado', item.sectorAfectado);
+      addDetailField(extra, 'Coordenadas', coordinates);
+      addDetailField(extra, 'Novedades', item.novedades, true);
+      addDetailField(extra, 'Fuente del reporte', item.fuente, true);
+      addDetailField(extra, 'Fecha de corte', formatDate(item.fechaCorte), true);
+      more.append(extra);
+      container.append(more);
     } catch (error) {
       container.textContent = `No se pudo cargar el detalle: ${error.message}`;
     }
   }
 
   function bindEvents() {
+    const setPage = () => {
+      const emergencies = location.hash === '#emergencias' || location.hash === '#reportes';
+      document.body.classList.toggle('show-emergencies', emergencies);
+      document.querySelectorAll('.nav-item').forEach((link) => {
+        const active = emergencies ? link.hash === '#emergencias' : link.hash === '#dashboard';
+        link.classList.toggle('active', active);
+        if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+      });
+      $('.breadcrumbs strong').textContent = emergencies ? 'Emergencias' : 'Panel general';
+      $('#reportes').id = 'emergencias';
+      if (emergencies) $('#emergencias').scrollIntoView({ block: 'start' });
+      else window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.addEventListener('hashchange', setPage);
+    setPage();
+    const sidebar = $('#sidebar');
+    if (localStorage.getItem('pa-nav-collapsed') === 'true') document.body.classList.add('nav-collapsed');
+    $('#nav-collapse-toggle').addEventListener('click', () => {
+      const collapsed = document.body.classList.toggle('nav-collapsed');
+      localStorage.setItem('pa-nav-collapsed', String(collapsed));
+      $('#nav-collapse-toggle').setAttribute('aria-expanded', String(!collapsed));
+      $('#nav-collapse-toggle').setAttribute('aria-label', collapsed ? 'Expandir barra de navegación' : 'Acoplar barra de navegación');
+    });
+    const themeToggle = $('#theme-toggle');
+    const setTheme = (theme) => {
+      document.documentElement.dataset.theme = theme;
+      themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro');
+      themeToggle.querySelector('.theme-label').textContent = theme === 'dark' ? 'Modo claro' : 'Modo oscuro';
+    };
+    setTheme(localStorage.getItem('pa-theme') || 'light');
+    themeToggle.addEventListener('click', () => {
+      const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('pa-theme', theme);
+      setTheme(theme);
+    });
     $('#apply-period').addEventListener('click', () => {
       const { desde, hasta } = periodParams();
       if (desde && hasta && desde > hasta) {
@@ -379,8 +473,8 @@
       refreshDashboard().catch(() => {});
     });
     $('#clear-period').addEventListener('click', () => {
-      $('#date-from').value = '';
-      $('#date-to').value = '';
+      $('#date-from').value = state.fechaInicialDatos;
+      $('#date-to').value = state.fechaMaximaDatos;
       state.page = 0;
       refreshDashboard().catch(() => {});
     });
@@ -415,12 +509,51 @@
         loadRows().catch((error) => showNotice(`No se pudo cargar la página. ${error.message}`));
       }
     });
+    $('#first-page').addEventListener('click', () => {
+      state.page = 0;
+      loadRows().catch((error) => showNotice(`No se pudo cargar la primera página. ${error.message}`));
+    });
+    $('#last-page').addEventListener('click', () => {
+      state.page = Math.max(0, state.totalPages - 1);
+      loadRows().catch((error) => showNotice(`No se pudo cargar la última página. ${error.message}`));
+    });
+    const goToPage = () => {
+      const requested = Number($('#page-input').value);
+      state.page = Math.min(Math.max(1, requested || 1), Math.max(1, state.totalPages)) - 1;
+      loadRows().catch((error) => showNotice(`No se pudo abrir esa página. ${error.message}`));
+    };
+    $('#go-page').addEventListener('click', goToPage);
+    $('#page-input').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') goToPage();
+    });
+    $('#page-size').addEventListener('change', () => {
+      state.pageSize = Number($('#page-size').value);
+      state.page = 0;
+      loadRows().catch((error) => showNotice(`No se pudo cambiar el tamaño de página. ${error.message}`));
+    });
+    $('#sort-by').addEventListener('change', () => {
+      state.sortBy = $('#sort-by').value;
+      $('#sort-direction').textContent = state.sortBy === 'fecha'
+        ? (state.sortDirection === 'desc' ? 'Más recientes ↓' : 'Más antiguas ↑')
+        : (state.sortDirection === 'asc' ? 'A–Z ↑' : 'Z–A ↓');
+      state.page = 0;
+      loadRows().catch((error) => showNotice(`No se pudo ordenar la tabla. ${error.message}`));
+    });
+    $('#sort-direction').addEventListener('click', () => {
+      state.sortDirection = state.sortDirection === 'desc' ? 'asc' : 'desc';
+      const label = state.sortBy === 'fecha'
+        ? (state.sortDirection === 'desc' ? 'Más recientes ↓' : 'Más antiguas ↑')
+        : (state.sortDirection === 'asc' ? 'A–Z ↑' : 'Z–A ↓');
+      $('#sort-direction').textContent = label;
+      $('#sort-direction').setAttribute('aria-label', `Orden ${state.sortDirection === 'desc' ? 'descendente' : 'ascendente'}`);
+      state.page = 0;
+      loadRows().catch((error) => showNotice(`No se pudo cambiar el orden. ${error.message}`));
+    });
     $('#detail-close').addEventListener('click', () => $('#detail-dialog').close());
     $('#detail-dialog').addEventListener('click', (event) => {
       if (event.target === $('#detail-dialog')) $('#detail-dialog').close();
     });
     $('#menu-toggle').addEventListener('click', () => {
-      const sidebar = $('#sidebar');
       const open = sidebar.classList.toggle('open');
       $('#menu-toggle').setAttribute('aria-expanded', String(open));
       $('#menu-toggle').setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');

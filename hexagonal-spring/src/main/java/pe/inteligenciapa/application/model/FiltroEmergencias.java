@@ -13,7 +13,9 @@ public record FiltroEmergencias(
         LocalDate desde,
         LocalDate hasta,
         int pagina,
-        int tamano) {
+        int tamano,
+        String ordenarPor,
+        String direccion) {
 
     public FiltroEmergencias {
         if (pagina < 0) {
@@ -25,5 +27,12 @@ public record FiltroEmergencias(
         if (desde != null && hasta != null && desde.isAfter(hasta)) {
             throw new IllegalArgumentException("La fecha 'desde' no puede ser posterior a 'hasta'");
         }
+        if (ordenarPor == null || !java.util.Set.of("fecha", "estado", "departamento", "evento").contains(ordenarPor)) {
+            throw new IllegalArgumentException("El campo de orden debe ser fecha, estado, departamento o evento");
+        }
+        if (direccion == null || !java.util.Set.of("asc", "desc").contains(direccion.toLowerCase(java.util.Locale.ROOT))) {
+            throw new IllegalArgumentException("La dirección debe ser asc o desc");
+        }
+        direccion = direccion.toLowerCase(java.util.Locale.ROOT);
     }
 }

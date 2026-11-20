@@ -2,15 +2,15 @@
 
 ## Idea
 
-**Inteligencia PA** será una API pequeña de apoyo a decisiones sobre emergencias en la Red Vial Nacional del Perú. Permitirá consultar eventos viales reportados por ubicación, tipo de peligro, estado de transitabilidad y periodo. La intención es ayudar a identificar dónde se concentran los incidentes y cuáles reportan interrupciones o restricciones.
+**Inteligencia PA** es una API con dashboard para explorar reportes de emergencias en la Red Vial Nacional del Perú. Permite consultar registros por ubicación, tipo de evento, estado de transitabilidad y periodo, y revisar su detalle.
 
-El nombre `PA` está pendiente de confirmar con el autor. El repositorio de trabajo solicitado es <https://github.com/Andres-leon-fernandez/inteligencia-pa>.
+El nombre del proyecto se mantiene como `Inteligencia PA`. Repositorio: <https://github.com/Andres-leon-fernandez/inteligencia-pa>.
 
 ## Pregunta que busca responder
 
 ¿Qué emergencias viales registradas requieren más atención según su ubicación, tipo de evento y estado de transitabilidad?
 
-La aplicación resumirá registros históricos y estados reportados. **No es un sistema de predicción de desastres ni declara oficialmente que una zona sea peligrosa.** La clasificación o priorización que se implemente deberá describirse como un indicador analítico del proyecto.
+La aplicación resume registros de una copia del dataset y estados reportados a su fecha de corte. **No es un sistema de predicción de desastres ni declara oficialmente que una zona sea peligrosa.** El ranking por departamento indica concentración de reportes, no una clasificación oficial de riesgo.
 
 ## Decisiones ya tomadas
 
@@ -19,7 +19,7 @@ La aplicación resumirá registros históricos y estados reportados. **No es un 
 - Persistencia: MongoDB.
 - Backend: Spring Boot.
 - Diseño: arquitectura hexagonal (puertos y adaptadores).
-- Mantener el alcance pequeño: una fuente, consultas e indicadores sencillos; sin Big Data.
+- Mantener el alcance pequeño: una fuente, consultas e indicadores descriptivos; sin Big Data.
 - CSV inicial guardado en `data/emergencias-red-vial-mtc-2026.csv`.
 
 ## Datos disponibles en el CSV
@@ -49,7 +49,7 @@ Los indicadores describen lo que aparece en los reportes. La fuente no contiene 
 - Predicción de huaicos, inundaciones u otros eventos.
 - Afirmar un nivel de riesgo oficial o socioeconómico no publicado por la fuente.
 - Ingesta automática semanal o conexión con sistemas del MTC.
-- Frontend, autenticación, microservicios, streaming o arquitectura Big Data.
+- Autenticación, microservicios, streaming o arquitectura Big Data.
 - Enriquecer con múltiples fuentes geográficas o demográficas.
 
 ## Cómo continuar si otro agente retoma el trabajo

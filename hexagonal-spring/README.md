@@ -2,6 +2,8 @@
 
 Backend Java de solo lectura con Spring Boot y arquitectura hexagonal, con dashboard HTML/CSS/JavaScript servido desde la misma aplicación. Consulta la colección `inteligencia_pa.emergencias_viales` en MongoDB Atlas.
 
+Para la guía de usuario, interpretación de indicadores, carga y normalización del CSV, consulta [la guía completa del proyecto](../docs/GUIA_PROYECTO.md).
+
 ## Requisitos
 
 - Java 21.
@@ -30,6 +32,8 @@ Con la API iniciada, abre `http://localhost:8080/` para usar el dashboard.
 - `GET http://localhost:8080/api/v1/emergencias/1`
 - `GET http://localhost:8080/api/v1/indicadores/resumen`
 
-La búsqueda acepta los filtros `departamento`, `provincia`, `distrito`, `estado`, `evento`, `red`, `busqueda`, `desde`, `hasta`, `pagina` y `tamano`. `busqueda` busca coincidencias en el ID, ubicación, vía y descripción. Las fechas usan `YYYY-MM-DD`; `pagina` comienza en cero y `tamano` permite de 1 a 100.
+La búsqueda acepta los filtros `departamento`, `provincia`, `distrito`, `estado`, `evento`, `red`, `busqueda`, `desde`, `hasta`, `pagina`, `tamano`, `ordenarPor` (`fecha`, `estado`, `departamento`, `evento`) y `direccion` (`asc`, `desc`). `busqueda` busca coincidencias en el ID, ubicación, vía y descripción. Las fechas usan `YYYY-MM-DD`; `pagina` comienza en cero y `tamano` permite de 1 a 100.
+
+El resumen de indicadores incluye `fechaInicialDatos` y `fechaMaximaDatos` para informar el rango de fechas disponible en toda la colección.
 
 La estructura hexagonal y responsabilidades se describen en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).

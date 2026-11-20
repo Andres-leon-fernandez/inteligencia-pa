@@ -25,7 +25,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="11" width="7" height="10" rx="1.5"/><rect x="3" y="14" width="8" height="7" rx="1.5"/></svg>
           <span>Panel general</span>
         </a>
-        <a class="nav-item" href="#reportes">
+        <a class="nav-item" href="#emergencias">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/><circle cx="19" cy="6" r="1"/></svg>
           <span>Emergencias</span>
         </a>
@@ -47,10 +47,12 @@
         <button class="icon-button mobile-menu" id="menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
+        <button class="icon-button desktop-nav-toggle" id="nav-collapse-toggle" type="button" aria-label="Acoplar barra de navegación" aria-expanded="true" title="Acoplar o expandir navegación"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM9 5v14"/><path d="m15 9-3 3 3 3"/></svg></button>
         <div class="breadcrumbs"><span>Inteligencia PA</span><span class="crumb-divider">/</span><strong>Panel general</strong></div>
         <div class="topbar-right">
           <div class="connection-indicator" id="connection-indicator"><span class="connection-dot"></span><span id="connection-label">Conectando</span></div>
           <span class="topbar-divider"></span>
+          <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Activar modo oscuro" title="Cambiar tema"><span aria-hidden="true">◐</span><span class="theme-label">Modo oscuro</span></button>
           <div class="profile-chip"><span class="profile-avatar">PA</span><span class="profile-name">Panel nacional</span></div>
         </div>
       </header>
@@ -58,9 +60,8 @@
       <main class="content">
         <section class="page-heading">
           <div>
-            <div class="eyebrow"><span class="eyebrow-line"></span> CENTRO DE OPERACIONES VIALES</div>
-            <h1>Emergencias en la red vial</h1>
-            <p class="page-subtitle">Una lectura clara de los reportes para orientar la atención y priorización vial.</p>
+            <h1>¿Qué emergencias viales requieren atención?</h1>
+            <p class="page-subtitle">Identifica los departamentos con más reportes y revisa qué vías figuran interrumpidas o restringidas.</p>
           </div>
           <div class="heading-meta">
             <span class="source-pill"><span class="source-icon">MTC</span> Datos oficiales</span>
@@ -123,9 +124,9 @@
           </article>
 
           <article class="panel department-panel">
-            <div class="panel-heading"><div><span class="section-kicker">DISTRIBUCIÓN GEOGRÁFICA</span><h2>Departamentos con más reportes</h2></div><span class="unit-label">REPORTES</span></div>
+            <div class="panel-heading"><div><span class="section-kicker">CONCENTRACIÓN DE REPORTES</span><h2>Departamentos con más registros</h2></div><span class="unit-label">N.º REPORTES</span></div>
             <div class="bar-chart" id="department-chart" aria-label="Reportes por departamento"></div>
-            <p class="chart-footnote">Se muestran los seis departamentos con más reportes en el periodo.</p>
+            <p class="chart-footnote">Las barras comparan el número de reportes por departamento. Más registros señalan concentración de reportes, no un riesgo oficial.</p>
           </article>
         </section>
 
@@ -142,6 +143,11 @@
             <div class="insight-divider"></div>
             <div class="insight-caveat"><span aria-hidden="true">ⓘ</span><span>Los estados reflejan el reporte al corte de la fuente; no son una confirmación del estado actual de la vía.</span></div>
           </article>
+        </section>
+
+        <section class="decision-note" aria-labelledby="decision-title">
+          <div class="decision-mark" aria-hidden="true">!</div>
+          <div><h2 id="decision-title">Zona con más reportes</h2><p id="decision-copy">Consulta los datos por departamento para identificar dónde se concentran los registros.</p></div>
         </section>
 
         <section class="panel reports-panel" id="reportes">
@@ -161,7 +167,22 @@
               <tbody id="reports-body"><tr><td class="table-state" colspan="6"><span class="loading-spinner"></span> Cargando emergencias…</td></tr></tbody>
             </table>
           </div>
-          <div class="table-footer"><span id="page-summary">—</span><div class="pagination"><button id="previous-page" class="page-button" type="button" aria-label="Página anterior" disabled>←</button><span id="page-number">1</span><button id="next-page" class="page-button" type="button" aria-label="Página siguiente" disabled>→</button></div></div>
+          <div class="table-footer">
+            <span id="page-summary">—</span>
+            <div class="table-tools">
+              <label class="table-control"><span>Ordenar</span><select id="sort-by"><option value="fecha">Fecha</option><option value="estado">Estado</option><option value="departamento">Departamento</option><option value="evento">Evento</option></select></label>
+              <button id="sort-direction" class="sort-direction" type="button" aria-label="Orden descendente" title="Cambiar sentido del orden">Más recientes ↓</button>
+              <label class="table-control"><span>Filas</span><select id="page-size"><option value="10">10</option><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select></label>
+            </div>
+            <nav class="pagination" aria-label="Paginación de emergencias">
+              <button id="first-page" class="page-button" type="button" aria-label="Primera página" title="Primera página" disabled>⇤</button>
+              <button id="previous-page" class="page-button" type="button" aria-label="Página anterior" disabled>‹</button>
+              <label class="page-jump"><span class="sr-only">Ir a página</span><input id="page-input" type="number" min="1" value="1" inputmode="numeric"><span id="page-total">/ 1</span></label>
+              <button id="next-page" class="page-button" type="button" aria-label="Página siguiente" disabled>›</button>
+              <button id="last-page" class="page-button" type="button" aria-label="Última página" title="Última página" disabled>⇥</button>
+              <button id="go-page" class="go-page" type="button">Ir</button>
+            </nav>
+          </div>
         </section>
 
         <footer class="page-footer"><span>Inteligencia PA <span class="footer-separator">·</span> Fuente: MTC / Datos Abiertos</span><span>Panel analítico de reportes viales</span></footer>

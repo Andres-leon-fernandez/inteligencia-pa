@@ -1,60 +1,55 @@
 # Inteligencia PA
 
-Proyecto académico para explorar emergencias en la Red Vial Nacional del Perú y apoyar la priorización de atención vial. La primera entrega usará un CSV público del MTC, MongoDB y Spring Boot con arquitectura hexagonal.
+Proyecto académico de análisis descriptivo de emergencias en la Red Vial Nacional del Perú. Combina datos abiertos del MTC, un importador Python, MongoDB y una API/dashboard Java con arquitectura hexagonal.
 
-## Estado
+## Empezar rápido
 
-El backend API está implementado y compila. La fuente está descargada en `data/emergencias-red-vial-mtc-2026.csv` y sus 1,362 registros ya fueron importados a Atlas en `inteligencia_pa.emergencias_viales`. El importador reutilizable está en `scripts/importar_emergencias.py`.
+Requisitos: Java 21, Python 3.10+ para importar y una URI válida de MongoDB en `.env` en la raíz del repositorio. Consulta la [guía completa del proyecto](docs/GUIA_PROYECTO.md) para entender el problema, base de datos, normalización, arquitectura e interpretación de resultados.
 
-El backend Java incluye una interfaz de dashboard HTML/CSS/JS servida por Spring Boot. Requiere Java 21 y usa Maven Wrapper, por lo que no hace falta instalar Maven globalmente.
+Desde la raíz, instala dependencias de importación y prepara el archivo local de configuración:
 
-## Ejecutar la API Java
+```powershell
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
 
-Con `.env` configurado y acceso de red permitido en Atlas:
+Edita `.env` localmente para definir `MONGODB_URI`. No lo subas a Git ni compartas sus credenciales.
+
+Valida el CSV sin conectar a MongoDB y luego impórtalo:
+
+```powershell
+python scripts/importar_emergencias.py --dry-run
+python scripts/importar_emergencias.py
+```
+
+Inicia la API y el dashboard:
 
 ```powershell
 Set-Location hexagonal-spring
 .\mvnw.cmd spring-boot:run
 ```
 
-Endpoints iniciales:
+Abre `http://localhost:8080/`. Consulta [hexagonal-spring/README.md](hexagonal-spring/README.md) para requisitos y empaquetado.
 
-```text
-GET http://localhost:8080/api/v1/emergencias
-GET http://localhost:8080/api/v1/emergencias?departamento=JUNIN&estado=INTERRUMPIDO
-GET http://localhost:8080/api/v1/emergencias/1
-GET http://localhost:8080/api/v1/indicadores/resumen
-```
+## Qué resuelve y qué no
 
-La búsqueda devuelve 20 filas por defecto; `pagina` empieza en 0 y `tamano` acepta valores de 1 a 100. También se puede filtrar por `provincia`, `distrito`, `evento`, `red`, `busqueda`, `desde` y `hasta` (fechas `YYYY-MM-DD`).
+Permite explorar dónde se concentran los reportes del MTC, qué estados y eventos aparecen y revisar el detalle de cada emergencia. Los conteos describen registros de una copia del conjunto; **no son predicciones, niveles oficiales de riesgo, ni confirmaciones del estado vial en tiempo real**. Para presentar resultados y entender sus límites, revisa la sección de interpretación en la [guía](docs/GUIA_PROYECTO.md).
 
-El proyecto Java y su ejecutable están en [`hexagonal-spring/`](hexagonal-spring/README.md). Para construir el JAR ejecutable: `Set-Location hexagonal-spring; .\mvnw.cmd -DskipTests package`. Para iniciarlo en Windows, ejecuta `hexagonal-spring/run-api.bat`.
+## API principal
 
-## Documentación para retomar el proyecto
+- `GET /api/v1/emergencias`: búsqueda, filtros, paginación y ordenamiento. Filtros: `departamento`, `provincia`, `distrito`, `estado`, `evento`, `red`, `busqueda`, `desde` y `hasta`. Paginación: `pagina` (base cero), `tamano` (1–100). Orden: `ordenarPor=fecha|estado|departamento|evento` y `direccion=asc|desc`.
+- `GET /api/v1/emergencias/{idEmergencia}`: detalle por identificador.
+- `GET /api/v1/indicadores/resumen?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`: total, conteos por estado/departamento/evento y fechas mínima/máxima disponibles.
 
-- [Contexto del proyecto](docs/CONTEXTO_PROYECTO.md): objetivo, alcance y decisiones tomadas.
-- [Fuente y diccionario de datos](docs/FUENTE_DE_DATOS.md): procedencia, corte, campos y limitaciones.
-- [Arquitectura hexagonal](hexagonal-spring/docs/ARQUITECTURA.md): dominio, puertos, adaptadores, casos de uso y contrato REST.
+Las fechas usan `YYYY-MM-DD`. El archivo fuente incluido contiene 1,362 registros y tiene corte documentado al 20 de agosto de 2026; consulta [FUENTE_DE_DATOS.md](docs/FUENTE_DE_DATOS.md) antes de reutilizarlo como dato actual.
 
-## Importar el CSV a MongoDB
+## Documentación
 
-Requiere Python 3.10+ y MongoDB accesible desde la máquina.
+- [Guía completa del proyecto](docs/GUIA_PROYECTO.md)
+- [Contexto, alcance y usuarios](docs/CONTEXTO_PROYECTO.md)
+- [Fuente y diccionario de datos](docs/FUENTE_DE_DATOS.md)
+- [Arquitectura hexagonal](hexagonal-spring/docs/ARQUITECTURA.md)
 
-```powershell
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-# Edita .env y coloca tu URI de MongoDB Atlas en MONGODB_URI.
-python scripts/importar_emergencias.py
-```
+## Fuente y atribución
 
-Por defecto se importa a `inteligencia_pa.emergencias_viales`. El proceso normaliza los campos, conserva los identificadores como texto y hace upsert por `id_emergencia`, así que repetir la importación actualiza documentos existentes sin borrar otros. Para validar la lectura del CSV sin conectarse a MongoDB:
-
-```powershell
-python scripts/importar_emergencias.py --dry-run
-```
-
-El archivo `.env` está excluido de Git. No compartas ni subas ese archivo. Consulta `python scripts/importar_emergencias.py --help` para cambiar archivo, base, colección o URI.
-
-## Fuente
-
-Ministerio de Transportes y Comunicaciones (MTC), [Emergencias en la Red Vial Nacional](https://www.datosabiertos.gob.pe/dataset/emergencias-en-la-red-vial-nacional-ministerio-de-transportes-y-comunicaciones-%E2%80%93-mtc). Licencia indicada en el portal: Open Data Commons Attribution License. Mantener la atribución al reutilizar los datos.
+Ministerio de Transportes y Comunicaciones, [Emergencias en la Red Vial Nacional](https://www.datosabiertos.gob.pe/dataset/emergencias-en-la-red-vial-nacional-ministerio-de-transportes-y-comunicaciones-%E2%80%93-mtc). La ficha indica licencia Open Data Commons Attribution License; atribuye al MTC y enlaza la ficha cuando se redistribuyan o presenten estos datos.

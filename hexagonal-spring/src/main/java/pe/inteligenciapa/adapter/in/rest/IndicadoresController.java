@@ -28,6 +28,8 @@ public class IndicadoresController {
         return new ResumenIndicadoresResponse(
                 resumen.desde(),
                 resumen.hasta(),
+                resumen.fechaInicialDatos(),
+                resumen.fechaMaximaDatos(),
                 resumen.totalReportes(),
                 resumen.porEstado().stream()
                         .map(item -> new IndicadorItemResponse(item.categoria(), item.cantidad()))
