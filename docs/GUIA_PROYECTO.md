@@ -233,11 +233,17 @@ inteligencia-pa/
 ├── README.md                     Inicio rápido
 └── hexagonal-spring/
     ├── src/main/java/pe/inteligenciapa/
-    │   ├── domain/               Modelo de dominio independiente
-    │   ├── application/          Casos de uso, puertos y modelos de consulta
-    │   ├── adapter/in/rest/      Controladores HTTP, DTO y mapeadores
-    │   ├── adapter/out/mongodb/  Consultas Mongo, documentos y mapeadores
-    │   └── config/               Conexión de casos de uso
+    │   ├── dominio/modelo/       Modelos independientes del framework
+    │   ├── aplicacion/           Casos de uso, modelos y puertos
+    │   │   ├── port/in/          Contratos de entrada
+    │   │   ├── port/out/         Contratos de salida
+    │   │   └── service/          Implementaciones de casos de uso
+    │   ├── infraestructura/adapter/
+    │   │   ├── in/controller/   Endpoints REST y manejo HTTP de errores
+    │   │   ├── in/dto/          Contratos JSON de la API
+    │   │   ├── in/mapper/       Conversión de dominio a respuesta REST
+    │   │   └── out/mongodb/     Persistencia y consultas MongoDB
+    │   └── configuracion/       Ensamble de dependencias
     ├── src/main/resources/
     │   ├── application.properties
     │   └── static/               Dashboard HTML, CSS y JavaScript

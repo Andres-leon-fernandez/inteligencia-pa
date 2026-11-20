@@ -17,13 +17,13 @@ La carga del CSV ocurre antes e independiente de la API: el importador no es un 
 
 | Parte | Ubicación | Responsabilidad |
 |---|---|---|
-| Dominio | `domain/model` | Representa `EmergenciaVial`, `UbicacionVial` y `Coordenadas`; no conoce Spring, HTTP ni MongoDB. |
-| Aplicación | `application/service`, `application/model` | Ejecuta buscar, obtener detalle y resumir indicadores; aplica validaciones y coordina puertos. |
-| Puerto de entrada | `application/port/in` | Contrato de lo que se puede pedir: búsqueda, detalle e indicadores. |
-| Puerto de salida | `application/port/out` | Contrato de los datos que la aplicación necesita consultar. |
-| Adaptador REST | `adapter/in/rest` | Convierte parámetros HTTP a modelos de consulta y el resultado a JSON DTO. |
-| Adaptador Mongo | `adapter/out/mongodb` | Traduce filtros y agregaciones a MongoTemplate; mapea documentos Mongo a dominio. |
-| Configuración | `config/UseCaseConfiguration.java` | Conecta los servicios de aplicación con las implementaciones de puertos. |
+| Dominio | `dominio/modelo` | Representa `EmergenciaVial`, `UbicacionVial` y `Coordenadas`; no conoce Spring, HTTP ni MongoDB. |
+| Aplicación | `aplicacion/service`, `aplicacion/modelo` | Ejecuta búsqueda, detalle e indicadores; valida entradas y coordina puertos. |
+| Puerto de entrada | `aplicacion/port/in` | Contrato de lo que se puede pedir: búsqueda, detalle e indicadores. |
+| Puerto de salida | `aplicacion/port/out` | Contrato de los datos que la aplicación necesita consultar. |
+| Adaptador REST | `infraestructura/adapter/in/{controller,dto,mapper}` | Convierte HTTP a modelos de consulta y los resultados a JSON DTO. |
+| Adaptador Mongo | `infraestructura/adapter/out/mongodb` | Traduce filtros y agregaciones a MongoTemplate; mapea documentos Mongo a dominio. |
+| Configuración | `configuracion/UseCaseConfiguration.java` | Conecta los servicios de aplicación con las implementaciones de los puertos. |
 
 Dirección de dependencias: los adaptadores conocen los contratos del núcleo; el dominio no depende de los adaptadores. Por eso se puede reemplazar REST o Mongo sin mover la lógica de los casos de uso.
 
@@ -41,8 +41,8 @@ No son copias arbitrarias: cada modelo protege un límite. El mapper adapta entr
 Ejemplo: filtrar por `estado=RESTRINGIDO`.
 
 1. El navegador envía `GET /api/v1/emergencias?estado=RESTRINGIDO`.
-2. `EmergenciaController` construye `FiltroEmergencias` y llama a `BuscarEmergenciasUseCase`.
-3. `BuscarEmergenciasService` valida paginación y delega en `EmergenciaVialQueryPort`.
+2. `infraestructura.adapter.in.controller.EmergenciaController` construye `FiltroEmergencias` y llama al puerto de entrada.
+3. `BuscarEmergenciasService` valida paginación y delega en `EmergenciaVialQueryPort` (`aplicacion.port.out`).
 4. `EmergenciaMongoAdapter` implementa el puerto, arma el criterio Mongo y obtiene documentos.
 5. `EmergenciaMongoMapper` convierte los documentos a `EmergenciaVial`.
 6. El controlador entrega JSON paginado; el dashboard actualiza tabla o visualizaciones.
