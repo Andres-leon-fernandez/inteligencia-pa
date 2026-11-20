@@ -12,7 +12,17 @@ Para la guía de usuario, interpretación de indicadores, carga y normalización
 
 No copies la URI ni las credenciales a este directorio. Spring carga `../.env`; ese archivo permanece ignorado por Git.
 
-## Ejecutable
+## Ejecución en desarrollo
+
+En Windows, ejecuta `run-api.bat` o desde esta carpeta:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+El modo de desarrollo carga Spring Boot DevTools para reiniciar la aplicación cuando cambian clases. Maven agrega directamente `src/main/resources` al classpath, así los cambios en HTML, CSS, JavaScript y GeoJSON se reflejan sin empaquetar ni recompilar. La URI MongoDB sigue leyéndose desde el archivo `.env` ubicado en la raíz del repositorio. Abre `http://localhost:8080/` cuando Spring indique que inició.
+
+## JAR distribuible
 
 Construye el JAR ejecutable con:
 
@@ -21,9 +31,7 @@ Set-Location hexagonal-spring
 .\mvnw.cmd -DskipTests package
 ```
 
-Maven genera `target/inteligencia-pa-api-0.0.1-SNAPSHOT.jar`. El ejecutable distribuible incluido en el repositorio está en `dist/inteligencia-pa-api.jar`. En Windows, `run-api.bat` usa el artefacto de `target` si existe; si no, ejecuta el JAR de `dist`.
-
-Con la API iniciada, abre `http://localhost:8080/` para usar el dashboard.
+Maven genera `target/inteligencia-pa-api-0.0.1-SNAPSHOT.jar`; el JAR distribuible incluido en el repositorio está en `dist/inteligencia-pa-api.jar`. El archivo `run-api.bat` siempre inicia la aplicación con Maven en modo desarrollo.
 
 ## Endpoints
 
@@ -31,9 +39,10 @@ Con la API iniciada, abre `http://localhost:8080/` para usar el dashboard.
 - `GET http://localhost:8080/api/v1/emergencias?departamento=JUNIN&estado=INTERRUMPIDO`
 - `GET http://localhost:8080/api/v1/emergencias/1`
 - `GET http://localhost:8080/api/v1/indicadores/resumen`
+- `GET http://localhost:8080/api/v1/indicadores/resumen?departamento=JUNIN&estado=RESTRINGIDO`
 
 La búsqueda acepta los filtros `departamento`, `provincia`, `distrito`, `estado`, `evento`, `red`, `busqueda`, `desde`, `hasta`, `pagina`, `tamano`, `ordenarPor` (`fecha`, `estado`, `departamento`, `evento`) y `direccion` (`asc`, `desc`). `busqueda` busca coincidencias en el ID, ubicación, vía y descripción. Las fechas usan `YYYY-MM-DD`; `pagina` comienza en cero y `tamano` permite de 1 a 100.
 
-El resumen de indicadores incluye `fechaInicialDatos` y `fechaMaximaDatos` para informar el rango de fechas disponible en toda la colección.
+El resumen de indicadores acepta filtros de fecha, `departamento`, `estado` y `evento`; incluye `fechaInicialDatos` y `fechaMaximaDatos` para informar el rango de fechas disponible en toda la colección.
 
 La estructura hexagonal y responsabilidades se describen en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).

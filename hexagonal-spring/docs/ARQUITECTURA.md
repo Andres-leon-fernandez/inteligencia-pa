@@ -1,95 +1,71 @@
-# Arquitectura hexagonal implementada
+# Arquitectura del backend
 
-## Alcance de esta fase
+## Idea central
 
-API REST de solo lectura y dashboard HTML/CSS/JavaScript para consultar emergencias viales del MTC almacenadas en MongoDB. El CSV se valida, normaliza e importa con `scripts/importar_emergencias.py` desde la raíz del repositorio.
-
-La aplicación es un monolito modular Spring Boot. El dominio no depende de Spring, MongoDB, HTTP ni CSV. Las dependencias apuntan al núcleo:
+Inteligencia PA es una aplicación Spring Boot pequeña, organizada en arquitectura hexagonal. Expone una API de consulta y un dashboard para explorar reportes de emergencias viales del MTC guardados en MongoDB. La arquitectura separa las reglas y casos de uso de las tecnologías de entrada y almacenamiento.
 
 ```text
-Cliente HTTP → Adaptador REST → Puerto de entrada → Caso de uso → Puerto de salida → Adaptador Mongo → MongoDB
+CSV MTC → importador Python → MongoDB Atlas
+                                  ↑
+Dashboard → HTTP/JSON → REST → puerto de entrada → caso de uso
+                                          → puerto de salida → adaptador Mongo
 ```
 
-## Estructura Java
+La carga del CSV ocurre antes e independiente de la API: el importador no es un adaptador de escritura en tiempo real. La API de esta fase consulta los documentos importados.
 
-```text
-pe.inteligenciapa
-├── domain.model
-│   ├── EmergenciaVial.java
-│   ├── UbicacionVial.java
-│   └── Coordenadas.java
-├── application
-│   ├── model
-│   │   ├── FiltroEmergencias.java
-│   │   ├── PaginaResultado.java
-│   │   ├── IndicadorItem.java
-│   │   └── ResumenIndicadores.java
-│   ├── port.in
-│   │   ├── BuscarEmergenciasUseCase.java
-│   │   ├── ObtenerEmergenciaUseCase.java
-│   │   └── ConsultarIndicadoresUseCase.java
-│   ├── port.out
-│   │   ├── EmergenciaVialQueryPort.java
-│   │   └── IndicadoresQueryPort.java
-│   └── service
-├── adapter.in.rest
-│   ├── EmergenciaController.java
-│   ├── IndicadoresController.java
-│   ├── ApiExceptionHandler.java
-│   ├── dto
-│   └── mapper
-├── adapter.out.mongodb
-│   ├── EmergenciaMongoAdapter.java
-│   ├── document/EmergenciaMongoDocument.java
-│   └── mapper/EmergenciaMongoMapper.java
-└── config/UseCaseConfiguration.java
-```
+## Capas y responsabilidades
 
-### Modelos
+| Parte | Ubicación | Responsabilidad |
+|---|---|---|
+| Dominio | `domain/model` | Representa `EmergenciaVial`, `UbicacionVial` y `Coordenadas`; no conoce Spring, HTTP ni MongoDB. |
+| Aplicación | `application/service`, `application/model` | Ejecuta buscar, obtener detalle y resumir indicadores; aplica validaciones y coordina puertos. |
+| Puerto de entrada | `application/port/in` | Contrato de lo que se puede pedir: búsqueda, detalle e indicadores. |
+| Puerto de salida | `application/port/out` | Contrato de los datos que la aplicación necesita consultar. |
+| Adaptador REST | `adapter/in/rest` | Convierte parámetros HTTP a modelos de consulta y el resultado a JSON DTO. |
+| Adaptador Mongo | `adapter/out/mongodb` | Traduce filtros y agregaciones a MongoTemplate; mapea documentos Mongo a dominio. |
+| Configuración | `config/UseCaseConfiguration.java` | Conecta los servicios de aplicación con las implementaciones de puertos. |
 
-- `EmergenciaVial`: reporte del MTC, con ID, fechas, evento, fenómeno, afectación, carretera, estado, fuente y ubicación.
-- `UbicacionVial`: departamento, provincia, distrito y coordenadas del reporte.
-- `Coordenadas`: latitud y longitud, validadas dentro de sus rangos geográficos.
-- `EmergenciaMongoDocument`: forma concreta del documento Mongo. Mantiene los nombres snake_case existentes y el `_id` técnico separado de `id_emergencia`.
-- DTOs REST: forma pública del JSON; no se filtra el documento Mongo ni se expone el `_id` interno.
-- Modelos de consulta: filtro, página y resultados agregados usados por la aplicación.
+Dirección de dependencias: los adaptadores conocen los contratos del núcleo; el dominio no depende de los adaptadores. Por eso se puede reemplazar REST o Mongo sin mover la lógica de los casos de uso.
 
-## Puertos y adaptadores
+## Modelos: por qué hay varios
 
-**Puertos de entrada** son contratos que describen qué puede pedir un cliente:
+- `EmergenciaVial`, `UbicacionVial`, `Coordenadas`: conceptos del dominio, expresados en términos del problema vial.
+- `EmergenciaMongoDocument`: forma persistida, con nombres y tipos propios del esquema Mongo. `id_emergencia` es la clave funcional; `_id` es el ID técnico.
+- `FiltroEmergencias`, `FiltroIndicadores`, `PaginaResultado`, `ResumenIndicadores`, `IndicadorItem`: entradas y resultados de consultas de aplicación.
+- DTO REST: contrato JSON de la API. Evita exponer directamente el documento Mongo.
 
-- `BuscarEmergenciasUseCase`: consulta filtrada y paginada.
-- `ObtenerEmergenciaUseCase`: detalle por `id_emergencia`.
-- `ConsultarIndicadoresUseCase`: resumen por periodo.
+No son copias arbitrarias: cada modelo protege un límite. El mapper adapta entre Mongo y dominio; el mapper REST adapta entre dominio/aplicación y HTTP.
 
-Los servicios de aplicación implementan estos contratos y coordinan la operación. No tienen anotaciones Spring.
+## Recorrido de una consulta
 
-**Puertos de salida** son contratos que expresan qué datos necesita la aplicación:
+Ejemplo: filtrar por `estado=RESTRINGIDO`.
 
-- `EmergenciaVialQueryPort`: búsqueda y detalle.
-- `IndicadoresQueryPort`: total y agrupaciones de reportes.
+1. El navegador envía `GET /api/v1/emergencias?estado=RESTRINGIDO`.
+2. `EmergenciaController` construye `FiltroEmergencias` y llama a `BuscarEmergenciasUseCase`.
+3. `BuscarEmergenciasService` valida paginación y delega en `EmergenciaVialQueryPort`.
+4. `EmergenciaMongoAdapter` implementa el puerto, arma el criterio Mongo y obtiene documentos.
+5. `EmergenciaMongoMapper` convierte los documentos a `EmergenciaVial`.
+6. El controlador entrega JSON paginado; el dashboard actualiza tabla o visualizaciones.
 
-`EmergenciaMongoAdapter` implementa los dos puertos mediante `MongoTemplate`. `EmergenciaMongoMapper` traduce Mongo ↔ dominio. `UseCaseConfiguration` registra los casos de uso como beans y conecta las implementaciones.
+Indicadores recorren el mismo límite: `IndicadoresController` → `ConsultarIndicadoresUseCase` → `IndicadoresQueryPort` → agregaciones Mongo. El resumen acepta fechas y filtros de departamento, estado y evento.
 
-El controlador REST recibe HTTP, crea modelos de consulta y llama a un puerto de entrada. Nunca accede directamente a Mongo. El adaptador Mongo traduce las consultas a criterios/aggregations de MongoDB y devuelve modelos de dominio o resultados de aplicación.
+## Cómo encaja la importación de datos
 
-## Endpoints implementados
+`scripts/importar_emergencias.py` es el proceso ETL inicial, fuera del backend Java:
 
-- `GET /api/v1/emergencias`: búsqueda paginada. Filtros opcionales: `departamento`, `provincia`, `distrito`, `estado`, `evento`, `red`, `busqueda`, `desde` y `hasta`. `busqueda` busca por ID, evento, ubicación, vía y descripciones. Parámetros de página: `pagina` (inicia en 0) y `tamano` (1 a 100, por defecto 20). Orden: `ordenarPor` acepta `fecha`, `estado`, `departamento` o `evento`; `direccion` acepta `asc` o `desc`. Valores por defecto: `fecha` y `desc`. El adaptador usa una lista permitida de campos de Mongo.
-- `GET /api/v1/emergencias/{idEmergencia}`: detalle por ID; devuelve 404 si no existe.
-- `GET /api/v1/indicadores/resumen?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`: total de reportes y conteos por estado, departamento y evento. Las fechas son opcionales. También devuelve `fechaInicialDatos` y `fechaMaximaDatos`, calculadas sobre la colección completa para que el dashboard inicialice el filtro de fechas con el rango realmente disponible.
+1. **Extrae/lee:** CSV del MTC, con codificación y separador conocidos.
+2. **Transforma:** valida columnas e IDs, normaliza encabezados/texto, convierte fechas y coordenadas, y revisa duplicados.
+3. **Carga:** conecta con `MONGODB_URI`, crea índice único por `id_emergencia` y hace upsert por lotes en `inteligencia_pa.emergencias_viales`.
+4. **Consulta:** la API lee esa colección a través del puerto de salida y el adaptador Mongo.
 
-Los indicadores cuentan reportes, no personas. El campo `estadoActual` es el último estado del archivo al `fechaCorte`, no necesariamente el estado vial actual. El ranking geográfico representa concentración de reportes y no mide el riesgo. No se predicen eventos.
+La hexagonal gobierna las consultas de la aplicación; el importador resuelve la preparación y carga de la fuente. Separarlos permite repetir la importación sin acoplar el caso de uso al formato del CSV. El upsert inserta o reemplaza IDs presentes; no borra automáticamente IDs ausentes en una descarga nueva.
 
-## MongoDB y configuración
+## Ejecutar y verificar
 
-- Base: `inteligencia_pa`.
-- Colección: `emergencias_viales`.
-- La URI se lee de `MONGODB_URI`, que Spring carga desde el `.env` de la raíz (`spring.config.import=optional:file:../.env[.properties]` al ejecutar desde `hexagonal-spring`). `.env` está ignorado por Git.
-- La colección tiene un índice único sobre `id_emergencia`, creado por el importador.
+Desde Windows, en la raíz: configurar `MONGODB_URI` en `.env`, validar primero con `python scripts/importar_emergencias.py --dry-run`; importar con `python scripts/importar_emergencias.py`. Luego ejecutar desde `hexagonal-spring` con `..\run-api.bat` o `..\mvnw.cmd spring-boot:run` según la consola actual. Abrir `http://localhost:8080/`.
 
-Spring Boot 4.1.2 usa Java 21 y Spring Data MongoDB para la persistencia. Spring Boot configura el cliente Mongo mediante `spring.mongodb.uri`; ver la [documentación oficial de MongoDB en Spring Boot](https://docs.spring.io/spring-boot/reference/data/nosql.html).
+Rutas principales: `GET /api/v1/emergencias`, `GET /api/v1/emergencias/{idEmergencia}` y `GET /api/v1/indicadores/resumen`. Swagger no está incluido en esta fase.
 
-## Estado
+## Límite de interpretación
 
-Se implementaron el dominio, aplicación, adaptadores REST y Mongo, dashboard y configuración. El dashboard separa panel general y tabla de emergencias, permite paginar, ordenar, elegir el tamaño de página y alternar tema claro/oscuro. El JAR se puede construir con Maven Wrapper; el proyecto no incluye pruebas automatizadas en esta fase.
+Los conteos describen los registros de la copia importada; no son conteos de personas, predicciones ni una clasificación oficial de riesgo. `estado_actual` significa último estado anotado en la fuente y puede no ser el estado vigente. Atribuir los datos al MTC y mencionar siempre el corte.

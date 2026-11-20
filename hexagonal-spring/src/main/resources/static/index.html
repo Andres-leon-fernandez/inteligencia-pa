@@ -6,8 +6,11 @@
   <meta name="theme-color" content="#10222d">
   <meta name="description" content="Panel de análisis de emergencias en la Red Vial Nacional del Perú.">
   <title>Inteligencia PA | Emergencias viales</title>
-  <link rel="stylesheet" href="/css/dashboard.css">
-  <script src="/js/dashboard.js" defer></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/css/dashboard.css?v=20261120-hide-insights">
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="/js/dashboard.js?v=20261120-crossfilter" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -61,7 +64,7 @@
         <section class="page-heading">
           <div>
             <h1>¿Qué emergencias viales requieren atención?</h1>
-            <p class="page-subtitle">Identifica los departamentos con más reportes y revisa qué vías figuran interrumpidas o restringidas.</p>
+            <p class="page-subtitle">Explora dónde se concentran los reportes del MTC, qué eventos aparecen con más frecuencia y qué estado vial fue consignado al corte de la fuente.</p>
           </div>
           <div class="heading-meta">
             <span class="source-pill"><span class="source-icon">MTC</span> Datos oficiales</span>
@@ -97,20 +100,45 @@
             <div class="kpi-foot"><span class="kpi-foot-dot dot-slate"></span><span>En el periodo seleccionado</span></div>
           </article>
           <article class="kpi-card">
-            <div class="kpi-top"><span class="kpi-label">Interrumpido</span><span class="kpi-icon icon-red"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4m0 3h.01"/></svg></span></div>
+            <div class="kpi-top"><span class="kpi-label">Estado interrumpido</span><span class="kpi-icon icon-red"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4m0 3h.01"/></svg></span></div>
             <div class="kpi-value" id="kpi-interrupted">—</div>
-            <div class="kpi-foot"><span class="kpi-foot-dot dot-red"></span><span id="kpi-interrupted-share">Último estado reportado</span></div>
+            <div class="kpi-foot"><span class="kpi-foot-dot dot-red"></span><span id="kpi-interrupted-share">Estado consignado al corte de la fuente</span></div>
           </article>
           <article class="kpi-card">
-            <div class="kpi-top"><span class="kpi-label">Restringido</span><span class="kpi-icon icon-amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 7h10M7 17h10"/><circle cx="6" cy="12" r="1.4"/><circle cx="18" cy="7" r="1.4"/><circle cx="9" cy="17" r="1.4"/></svg></span></div>
+            <div class="kpi-top"><span class="kpi-label">Estado restringido</span><span class="kpi-icon icon-amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 7h10M7 17h10"/><circle cx="6" cy="12" r="1.4"/><circle cx="18" cy="7" r="1.4"/><circle cx="9" cy="17" r="1.4"/></svg></span></div>
             <div class="kpi-value" id="kpi-restricted">—</div>
-            <div class="kpi-foot"><span class="kpi-foot-dot dot-amber"></span><span id="kpi-restricted-share">Último estado reportado</span></div>
+            <div class="kpi-foot"><span class="kpi-foot-dot dot-amber"></span><span id="kpi-restricted-share">Estado consignado al corte de la fuente</span></div>
           </article>
           <article class="kpi-card">
-            <div class="kpi-top"><span class="kpi-label">Departamentos</span><span class="kpi-icon icon-green"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 7 6-3 6 3 6-3v13l-6 3-6-3-6 3V7Z"/><path d="M9 4v13m6-10v13"/></svg></span></div>
-            <div class="kpi-value" id="kpi-departments">—</div>
-            <div class="kpi-foot"><span class="kpi-foot-dot dot-green"></span><span>Con reportes en el periodo</span></div>
+            <div class="kpi-top"><span class="kpi-label">Estado normal</span><span class="kpi-icon icon-green"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/><circle cx="12" cy="12" r="10"/></svg></span></div>
+            <div class="kpi-value" id="kpi-normal">—</div>
+            <div class="kpi-foot"><span class="kpi-foot-dot dot-green"></span><span id="kpi-normal-share">Estado consignado al corte de la fuente</span></div>
           </article>
+          <article class="kpi-card">
+            <div class="kpi-top"><span class="kpi-label">Departamento con más reportes</span><span class="kpi-icon icon-green"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 7 6-3 6 3 6-3v13l-6 3-6-3-6 3V7Z"/><path d="M9 4v13m6-10v13"/></svg></span></div>
+            <div class="kpi-value kpi-text-value" id="kpi-top-department">—</div>
+            <div class="kpi-foot"><span class="kpi-foot-dot dot-green"></span><span id="kpi-top-department-detail">Conteo y proporción del periodo</span></div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-top"><span class="kpi-label">Evento más registrado</span><span class="kpi-icon icon-amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4m0 3h.01"/></svg></span></div>
+            <div class="kpi-value kpi-text-value" id="kpi-top-event">—</div>
+            <div class="kpi-foot"><span class="kpi-foot-dot dot-amber"></span><span id="kpi-top-event-detail">Tipo de incidente más frecuente</span></div>
+          </article>
+        </section>
+
+        <section class="panel map-panel" aria-labelledby="map-title">
+          <div class="panel-heading"><div><span class="section-kicker">DISTRIBUCIÓN TERRITORIAL</span><h2 id="map-title">Concentración geográfica de reportes</h2></div><span class="unit-label" id="map-count">CARGANDO PUNTOS…</span></div>
+          <p class="map-description">Toca un departamento en el mapa o selecciónalo en la lista. El mapa se centrará en esa zona y reajustará la intensidad para comparar sus concentraciones internas.</p>
+          <div class="map-controls">
+            <label for="map-department">Explorar departamento
+              <select id="map-department"><option value="">Todo el Perú</option></select>
+            </label>
+            <button class="button-quiet" id="map-reset" type="button">Ver Perú</button>
+            <span id="map-selection-summary" aria-live="polite">Mostrando todos los departamentos</span>
+          </div>
+          <div id="report-map" role="img" aria-label="Mapa de calor de reportes geolocalizados en el Perú"><div class="map-loading"><span class="loading-spinner"></span> Preparando mapa…</div></div>
+          <div class="map-foot"><span><i class="heat-gradient" aria-hidden="true"></i> Menor concentración <strong>→</strong> Mayor concentración</span><span>Mapa base © OpenStreetMap</span></div>
+          <p class="chart-footnote">La concentración refleja registros y calidad de geolocalización; no representa un mapa oficial de riesgo, severidad ni estado vial actual.</p>
         </section>
 
         <section class="chart-grid" aria-label="Gráficos de indicadores">

@@ -2,6 +2,16 @@
 
 Esta guía explica qué problema aborda el proyecto, qué contiene la fuente, cómo se transforma y carga en MongoDB, cómo se organiza el código y cómo presentar los indicadores con una interpretación responsable.
 
+## Resumen para presentar el proyecto
+
+**Objetivo:** construir una herramienta pequeña de apoyo descriptivo para explorar emergencias reportadas en la Red Vial Nacional del Perú. El usuario filtra por periodo, departamento, estado o evento; consulta KPIs, concentración territorial y fichas de reportes. El resultado ayuda a decidir qué registros revisar primero; no calcula riesgo oficial ni predice emergencias.
+
+**Flujo completo:** (1) descargar el CSV público del MTC; (2) validar y normalizarlo con el importador Python; (3) cargar documentos en MongoDB Atlas; (4) Spring Boot consulta Mongo mediante la arquitectura hexagonal y expone endpoints REST; (5) HTML/CSS/JavaScript consume la API y presenta indicadores y detalles.
+
+**Cómo explicarlo en una frase:** “El CSV es la fuente; el importador lo prepara y lo guarda en MongoDB; la API Java lo consulta a través de puertos y adaptadores; el dashboard convierte esas respuestas en vistas filtrables para analizar los reportes”.
+
+Para la explicación técnica de cada capa y un recorrido de petición, consulta la [arquitectura compacta](../hexagonal-spring/docs/ARQUITECTURA.md). Esta guía amplía fuente, carga, ejecución e interpretación.
+
 ## 1. Propósito
 
 Inteligencia PA organiza reportes del MTC sobre emergencias en la Red Vial Nacional del Perú. Permite responder preguntas operativas como:
@@ -144,7 +154,7 @@ Set-Location hexagonal-spring
 .\mvnw.cmd spring-boot:run
 ```
 
-Abre `http://localhost:8080/`. Para detener el servidor, presiona `Ctrl+C` en la consola donde se está ejecutando.
+`run-api.bat` ejecuta el mismo comando Maven desde Windows. Spring Boot DevTools está incluido para reiniciar la aplicación cuando cambian clases. El plugin Maven carga `src/main/resources` directamente para que los cambios de HTML, CSS, JavaScript y GeoJSON se reflejen sin empaquetar ni recompilar. Abre `http://localhost:8080/`. Para detener el servidor, presiona `Ctrl+C` en la consola donde se está ejecutando.
 
 Para generar el JAR ejecutable sin ejecutar pruebas:
 
@@ -152,7 +162,7 @@ Para generar el JAR ejecutable sin ejecutar pruebas:
 .\mvnw.cmd -DskipTests package
 ```
 
-El JAR de compilación queda en `hexagonal-spring/target/`. `hexagonal-spring/run-api.bat` selecciona el artefacto local de `target` si está disponible; si no, usa `dist/inteligencia-pa-api.jar`.
+El JAR de compilación queda en `hexagonal-spring/target/`. La ejecución diaria mediante `run-api.bat` usa Maven y no depende del JAR empaquetado.
 
 ### Configurar Java 21 si Maven ve Java 17
 
@@ -205,9 +215,9 @@ Busca por `id_emergencia`; devuelve 404 si no existe.
 
 ### Resumen de indicadores y rango disponible
 
-`GET /api/v1/indicadores/resumen?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
+`GET /api/v1/indicadores/resumen?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&departamento=JUNIN&estado=RESTRINGIDO`
 
-Devuelve el total y las agrupaciones por estado, departamento y evento dentro del rango opcional. También informa `fechaInicialDatos` y `fechaMaximaDatos`: fecha mínima y máxima de ocurrencia presentes en toda la colección. La interfaz utiliza esos dos valores para inicializar y limitar los campos “Desde” y “Hasta”.
+Devuelve el total y las agrupaciones por estado, departamento y evento dentro del rango opcional. Acepta los filtros opcionales `departamento`, `estado` y `evento`; así el dashboard actualiza sus indicadores, gráficos y mapa al seleccionar una categoría. También informa `fechaInicialDatos` y `fechaMaximaDatos`: fecha mínima y máxima de ocurrencia presentes en toda la colección. La interfaz utiliza esos dos valores para inicializar y limitar los campos “Desde” y “Hasta”.
 
 Los nombres de categorías se devuelven en `porEstado`, `porDepartamento` y `porEvento`, cada uno con `categoria` y `cantidad`. Son conteos de documentos, no de personas.
 
@@ -234,7 +244,7 @@ inteligencia-pa/
     ├── docs/ARQUITECTURA.md      Detalle de capas y responsabilidades
     ├── pom.xml                   Dependencias y configuración Maven
     ├── mvnw.cmd                  Maven Wrapper para Windows
-    └── run-api.bat               Inicio del JAR disponible
+    └── run-api.bat               Inicio Maven de desarrollo en Windows
 ```
 
 ## 10. Arquitectura y recorrido de una petición

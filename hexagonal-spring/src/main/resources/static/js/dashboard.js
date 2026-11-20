@@ -23,7 +23,16 @@
     fechaMaximaDatos: '',
     cutoff: null,
     allSummary: null,
-    debounce: null
+    debounce: null,
+    map: null,
+    heatLayer: null,
+    mapRequest: 0,
+    departmentGeoLayer: null,
+    departmentGeoJson: null,
+    departmentGeoPromise: null,
+    mapRecords: [],
+    mapDepartmentCounts: new Map(),
+    selectedDepartment: ''
   };
 
   const $ = (selector) => document.querySelector(selector);
@@ -93,6 +102,40 @@
     return { desde: $('#date-from').value, hasta: $('#date-to').value };
   }
 
+  function dashboardParams() {
+    return {
+      ...periodParams(),
+      departamento: $('#department-filter').value,
+      estado: $('#status-filter').value,
+      evento: $('#event-filter').value
+    };
+  }
+
+  function selectedFilter(type) {
+    return ({
+      departamento: $('#department-filter').value,
+      estado: $('#status-filter').value,
+      evento: $('#event-filter').value
+    })[type] || '';
+  }
+
+  function setKpiFilter(id, type, value) {
+    const card = $(`#${id}`).closest('.kpi-card');
+    if (!value) {
+      delete card.dataset.crossFilter;
+      delete card.dataset.crossValue;
+      card.removeAttribute('aria-pressed');
+      card.removeAttribute('role');
+      card.removeAttribute('tabindex');
+      return;
+    }
+    card.dataset.crossFilter = type;
+    card.dataset.crossValue = value;
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
+    card.setAttribute('aria-pressed', String(selectedFilter(type).toUpperCase() === value.toUpperCase()));
+  }
+
   function setStatusBadge(value) {
     const status = String(value || 'DESCONOCIDO').toUpperCase();
     const className = ['INTERRUMPIDO', 'RESTRINGIDO', 'NORMAL'].includes(status)
@@ -111,18 +154,216 @@
     const total = Number(summary.totalReportes || 0);
     const interrupted = statusCount(summary, 'INTERRUMPIDO');
     const restricted = statusCount(summary, 'RESTRINGIDO');
-    const departments = (summary.porDepartamento || []).filter((item) => item.categoria).length;
+    const normal = statusCount(summary, 'NORMAL');
+    const leadingDepartment = [...(summary.porDepartamento || [])]
+      .filter((item) => item.categoria)
+      .sort((a, b) => Number(b.cantidad || 0) - Number(a.cantidad || 0))[0];
+    const leadingEvent = [...(summary.porEvento || [])]
+      .filter((item) => item.categoria)
+      .sort((a, b) => Number(b.cantidad || 0) - Number(a.cantidad || 0))[0];
     $('#kpi-total').textContent = formatNumber(total);
     $('#kpi-interrupted').textContent = formatNumber(interrupted);
     $('#kpi-restricted').textContent = formatNumber(restricted);
-    $('#kpi-departments').textContent = formatNumber(departments);
+    $('#kpi-normal').textContent = formatNumber(normal);
     $('#kpi-interrupted-share').textContent = total
-      ? `${((interrupted / total) * 100).toFixed(1)}% de los reportes`
+      ? `${((interrupted / total) * 100).toFixed(1)}% de reportes · corte MTC`
       : 'Sin reportes en el periodo';
     $('#kpi-restricted-share').textContent = total
-      ? `${((restricted / total) * 100).toFixed(1)}% de los reportes`
+      ? `${((restricted / total) * 100).toFixed(1)}% de reportes · corte MTC`
       : 'Sin reportes en el periodo';
+    $('#kpi-normal-share').textContent = total
+      ? `${((normal / total) * 100).toFixed(1)}% de reportes · corte MTC`
+      : 'Sin reportes en el periodo';
+    $('#kpi-top-department').textContent = leadingDepartment?.categoria || 'Sin datos';
+    $('#kpi-top-department').title = leadingDepartment?.categoria || '';
+    $('#kpi-top-department-detail').textContent = leadingDepartment && total
+      ? `${formatNumber(leadingDepartment.cantidad)} reportes · ${((Number(leadingDepartment.cantidad) / total) * 100).toFixed(1)}% del periodo`
+      : 'No hay reportes por departamento';
+    $('#kpi-top-event').textContent = leadingEvent?.categoria || 'Sin datos';
+    $('#kpi-top-event').title = leadingEvent?.categoria || '';
+    $('#kpi-top-event-detail').textContent = leadingEvent && total
+      ? `${formatNumber(leadingEvent.cantidad)} registros · ${((Number(leadingEvent.cantidad) / total) * 100).toFixed(1)}% del periodo`
+      : 'No hay eventos para clasificar';
+    setKpiFilter('kpi-interrupted', 'estado', 'INTERRUMPIDO');
+    setKpiFilter('kpi-restricted', 'estado', 'RESTRINGIDO');
+    setKpiFilter('kpi-normal', 'estado', 'NORMAL');
+    setKpiFilter('kpi-top-department', 'departamento', leadingDepartment?.categoria);
+    setKpiFilter('kpi-top-event', 'evento', leadingEvent?.categoria);
     $('#donut-total').textContent = formatNumber(total);
+  }
+
+  function initializeMap() {
+    if (state.map || !window.L) return Boolean(state.map);
+    const container = $('#report-map');
+    container.innerHTML = '';
+    state.map = L.map(container, { scrollWheelZoom: false }).setView([-9.2, -75.0], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(state.map);
+    if (L.heatLayer) {
+      state.heatLayer = L.heatLayer([], {
+        radius: 24, blur: 19, maxZoom: 9, max: 1,
+        gradient: { 0.2: '#3a9b8f', 0.48: '#f0c15a', 0.72: '#ed814b', 1: '#bb3d4b' }
+      }).addTo(state.map);
+    }
+    window.setTimeout(() => state.map?.invalidateSize(), 100);
+    return true;
+  }
+
+  function normalizeArea(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  }
+
+  function departmentStyle(feature) {
+    const selected = normalizeArea(feature.properties.NOMBDEP) === normalizeArea(state.selectedDepartment);
+    return selected
+      ? { color: '#c56b43', weight: 2.2, fillColor: '#e99a67', fillOpacity: 0.19 }
+      : { color: '#72868a', weight: 0.85, fillColor: '#d5dfdf', fillOpacity: 0.035 };
+  }
+
+  function refreshDepartmentTooltips() {
+    state.departmentGeoLayer?.eachLayer((layer) => {
+      const name = layer.feature.properties.NOMBDEP;
+      const count = state.mapDepartmentCounts.get(normalizeArea(name)) || 0;
+      layer.setTooltipContent(`<strong>${escapeHtml(name)}</strong><br>${formatNumber(count)} reportes en el periodo`);
+    });
+  }
+
+  async function loadDepartmentBoundaries() {
+    if (state.departmentGeoLayer) return;
+    if (!state.departmentGeoJson) {
+      if (!state.departmentGeoPromise) {
+        state.departmentGeoPromise = getJson('/data/peru-departamentos.geojson')
+          .then((data) => (state.departmentGeoJson = data));
+      }
+      await state.departmentGeoPromise;
+    }
+    if (state.departmentGeoLayer) return;
+    const select = $('#map-department');
+    const features = [...(state.departmentGeoJson.features || [])]
+      .sort((a, b) => a.properties.NOMBDEP.localeCompare(b.properties.NOMBDEP, 'es'));
+    select.innerHTML = '<option value="">Todo el Perú</option>' + features.map((feature) => {
+      const name = feature.properties.NOMBDEP;
+      return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+    }).join('');
+    state.departmentGeoLayer = L.geoJSON(state.departmentGeoJson, {
+      style: departmentStyle,
+      onEachFeature(feature, layer) {
+        const name = feature.properties.NOMBDEP;
+        layer.bindTooltip('', { sticky: true, direction: 'auto', className: 'department-tooltip' });
+        layer.on({
+          click: () => selectMapDepartment(name),
+          mouseover: () => {
+            if (normalizeArea(name) !== normalizeArea(state.selectedDepartment)) {
+              layer.setStyle({ color: '#d19151', weight: 1.7, fillColor: '#e9be77', fillOpacity: 0.12 });
+            }
+          },
+          mouseout: () => state.departmentGeoLayer.resetStyle(layer)
+        });
+      }
+    }).addTo(state.map);
+    refreshDepartmentTooltips();
+  }
+
+  function renderMapSelection() {
+    const selected = normalizeArea(state.selectedDepartment);
+    const records = selected
+      ? state.mapRecords.filter((record) => normalizeArea(record.departamento) === selected)
+      : state.mapRecords;
+    const cells = new Map();
+    records.forEach((record) => {
+      const latitude = Number(record.latitud);
+      const longitude = Number(record.longitud);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+          || latitude > 1 || latitude < -19 || longitude > -68 || longitude < -82) return;
+      const key = `${Math.round(latitude / 0.025)}:${Math.round(longitude / 0.025)}`;
+      const cell = cells.get(key) || { latitude: 0, longitude: 0, count: 0 };
+      cell.latitude += latitude;
+      cell.longitude += longitude;
+      cell.count += 1;
+      cells.set(key, cell);
+    });
+    const maxCellCount = Math.max(1, ...[...cells.values()].map((cell) => cell.count));
+    const heatPoints = [...cells.values()].map((cell) => [
+      cell.latitude / cell.count,
+      cell.longitude / cell.count,
+      Math.max(0.2, Math.sqrt(cell.count / maxCellCount))
+    ]);
+    state.heatLayer.setLatLngs(heatPoints);
+    const name = state.selectedDepartment || 'Todo el Perú';
+    const counted = state.mapDepartmentCounts.get(selected) || records.length;
+    const geolocatedCount = [...cells.values()].reduce((sum, cell) => sum + cell.count, 0);
+    $('#map-count').textContent = `${formatNumber(cells.size)} ZONAS · ${formatNumber(records.length)} REPORTES`;
+    $('#map-selection-summary').textContent = `${name}: ${formatNumber(counted)} reportes · ${formatNumber(geolocatedCount)} con coordenada · escala local`;
+    state.departmentGeoLayer?.setStyle(departmentStyle);
+    if (state.selectedDepartment && state.departmentGeoLayer) {
+      let selectedLayer = null;
+      state.departmentGeoLayer.eachLayer((layer) => {
+        if (normalizeArea(layer.feature.properties.NOMBDEP) === selected) selectedLayer = layer;
+      });
+      if (selectedLayer) state.map.fitBounds(selectedLayer.getBounds(), { padding: [18, 18], maxZoom: 9 });
+    } else if (state.departmentGeoLayer) {
+      state.map.fitBounds(state.departmentGeoLayer.getBounds(), { padding: [18, 18] });
+    } else {
+      state.map.setView([-9.2, -75.0], 5);
+    }
+    window.setTimeout(() => state.map?.invalidateSize(), 100);
+  }
+
+  function selectMapDepartment(department) {
+    const next = normalizeArea(department) === normalizeArea(state.selectedDepartment) ? '' : (department || '');
+    state.selectedDepartment = next;
+    const departmentOption = [...$('#department-filter').options].find((option) =>
+      normalizeArea(option.value) === normalizeArea(next));
+    $('#department-filter').value = next ? (departmentOption?.value || '') : '';
+    const mapOption = [...$('#map-department').options].find((option) =>
+      normalizeArea(option.value) === normalizeArea(next));
+    $('#map-department').value = next ? (mapOption?.value || '') : '';
+    state.page = 0;
+    renderMapSelection();
+    refreshDashboard().catch((error) => showNotice(`No se pudo aplicar la selección territorial. ${error.message}`));
+  }
+
+  async function loadMap() {
+    const requestId = ++state.mapRequest;
+    const count = $('#map-count');
+    if (!window.L || !L.heatLayer) {
+      count.textContent = 'MAPA NO DISPONIBLE';
+      $('#report-map').innerHTML = '<div class="map-message">No se pudo cargar la librería del mapa. Revisa tu conexión a internet y actualiza la página.</div>';
+      return;
+    }
+    count.textContent = 'CARGANDO PUNTOS…';
+    if (!initializeMap()) return;
+    document.querySelector('.map-empty-overlay')?.remove();
+    state.heatLayer.setLatLngs([]);
+    try {
+      await loadDepartmentBoundaries();
+      const params = { ...dashboardParams(), pagina: 0, tamano: 100, ordenarPor: 'fecha', direccion: 'desc' };
+      const first = await getJson(makeUrl(API.emergencies, params));
+      const pages = Number(first.totalPaginas || 0);
+      const remaining = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, index) =>
+        getJson(makeUrl(API.emergencies, { ...params, pagina: index + 1 }))));
+      if (requestId !== state.mapRequest) return;
+      const records = [...(first.contenido || []), ...remaining.flatMap((page) => page.contenido || [])];
+      state.mapRecords = records.map((record) => ({
+        departamento: record.ubicacion?.departamento,
+        latitud: record.ubicacion?.latitud,
+        longitud: record.ubicacion?.longitud
+      }));
+      state.mapDepartmentCounts = new Map();
+      state.mapRecords.forEach((record) => {
+        const key = normalizeArea(record.departamento);
+        if (key) state.mapDepartmentCounts.set(key, (state.mapDepartmentCounts.get(key) || 0) + 1);
+      });
+      refreshDepartmentTooltips();
+      renderMapSelection();
+    } catch (error) {
+      if (requestId !== state.mapRequest) return;
+      count.textContent = 'ERROR AL CARGAR';
+      showNotice(`No se pudieron cargar los puntos del mapa. ${error.message}`);
+    }
   }
 
   function renderStatusChart(summary) {
@@ -151,7 +392,8 @@
       const color = STATE_COLORS[key] || STATE_COLORS.DESCONOCIDO;
       const percentage = (Number(item.cantidad) / total * 100).toFixed(1);
       const label = key === 'DESCONOCIDO' ? 'Sin dato' : key.toLowerCase();
-      return `<div class="legend-item"><span class="legend-swatch" style="background:${color}"></span><span class="legend-name">${escapeHtml(label)}</span><strong class="legend-value">${formatNumber(item.cantidad)}</strong><span class="legend-percent">${percentage}%</span></div>`;
+      const pressed = selectedFilter('estado').toUpperCase() === key;
+      return `<button class="legend-item cross-filter-row${pressed ? ' is-selected' : ''}" type="button" data-cross-filter="estado" data-cross-value="${escapeHtml(key)}" aria-pressed="${pressed}"><span class="legend-swatch" style="background:${color}"></span><span class="legend-name">${escapeHtml(label)}</span><strong class="legend-value">${formatNumber(item.cantidad)}</strong><span class="legend-percent">${percentage}%</span></button>`;
     }).join('');
   }
 
@@ -164,7 +406,8 @@
     }
     container.innerHTML = topItems.map((item) => {
       const width = Math.max(2, Number(item.cantidad) / max * 100);
-      return `<div class="bar-row"><span class="bar-name" title="${escapeHtml(item.categoria)}">${escapeHtml(item.categoria)}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><strong class="bar-value">${formatNumber(item.cantidad)}</strong></div>`;
+      const pressed = selectedFilter('departamento').toUpperCase() === String(item.categoria).toUpperCase();
+      return `<button class="bar-row cross-filter-row${pressed ? ' is-selected' : ''}" type="button" data-cross-filter="departamento" data-cross-value="${escapeHtml(item.categoria)}" aria-pressed="${pressed}"><span class="bar-name" title="${escapeHtml(item.categoria)}">${escapeHtml(item.categoria)}</span><span class="bar-track"><span class="bar-fill" style="width:${width}%"></span></span><strong class="bar-value">${formatNumber(item.cantidad)}</strong></button>`;
     }).join('');
   }
 
@@ -178,7 +421,8 @@
     }
     container.innerHTML = topItems.map((item, index) => {
       const width = Math.max(3, Number(item.cantidad) / max * 100);
-      return `<div class="event-row"><span class="event-rank-number">0${index + 1}</span><span class="event-name" title="${escapeHtml(item.categoria)}">${escapeHtml(item.categoria)}</span><div class="event-track"><div class="event-fill" style="width:${width}%"></div></div><strong class="event-count">${formatNumber(item.cantidad)}</strong></div>`;
+      const pressed = selectedFilter('evento').toUpperCase() === String(item.categoria).toUpperCase();
+      return `<button class="event-row cross-filter-row${pressed ? ' is-selected' : ''}" type="button" data-cross-filter="evento" data-cross-value="${escapeHtml(item.categoria)}" aria-pressed="${pressed}"><span class="event-rank-number">0${index + 1}</span><span class="event-name" title="${escapeHtml(item.categoria)}">${escapeHtml(item.categoria)}</span><span class="event-track"><span class="event-fill" style="width:${width}%"></span></span><strong class="event-count">${formatNumber(item.cantidad)}</strong></button>`;
     }).join('');
   }
 
@@ -302,13 +546,13 @@
   }
 
   async function loadSummary() {
-    const result = await getJson(makeUrl(API.summary, periodParams()));
+    const result = await getJson(makeUrl(API.summary, dashboardParams()));
     renderSummary(result);
   }
 
   async function refreshDashboard({ reloadOptions = false } = {}) {
     hideNotice();
-    const summaryUrl = makeUrl(API.summary, reloadOptions ? {} : periodParams());
+    const summaryUrl = makeUrl(API.summary, reloadOptions ? {} : dashboardParams());
     try {
       const summary = await getJson(summaryUrl);
       if (reloadOptions) {
@@ -322,11 +566,13 @@
         if (!$('#date-from').value) $('#date-from').value = state.fechaInicialDatos;
         if (!$('#date-to').value) $('#date-to').value = state.fechaMaximaDatos;
         populateFilterOptions(summary);
+        state.selectedDepartment = $('#department-filter').value;
+        $('#map-department').value = state.selectedDepartment;
         renderSummary(summary);
       } else {
         renderSummary(summary);
       }
-      await loadRows();
+      await Promise.all([loadRows(), loadMap()]);
       setConnection(true);
     } catch (error) {
       setConnection(false);
@@ -479,12 +725,46 @@
       refreshDashboard().catch(() => {});
     });
     $('#refresh-data').addEventListener('click', () => refreshDashboard().catch(() => {}));
+    $('#map-department').addEventListener('change', (event) => selectMapDepartment(event.target.value));
+    $('#map-reset').addEventListener('click', () => selectMapDepartment(''));
     $('#notice-close').addEventListener('click', hideNotice);
     ['department-filter', 'status-filter', 'event-filter'].forEach((id) => {
       $(`#${id}`).addEventListener('change', () => {
         state.page = 0;
-        loadRows().catch((error) => showNotice(`No se pudo filtrar la tabla. ${error.message}`));
+        if (id === 'department-filter') {
+          state.selectedDepartment = $('#department-filter').value;
+          const option = [...$('#map-department').options].find((item) =>
+            normalizeArea(item.value) === normalizeArea(state.selectedDepartment));
+          $('#map-department').value = option?.value || '';
+        }
+        refreshDashboard().catch((error) => showNotice(`No se pudo filtrar el panel. ${error.message}`));
       });
+    });
+    document.addEventListener('click', (event) => {
+      const control = event.target.closest('[data-cross-filter][data-cross-value]');
+      if (!control) return;
+      const type = control.dataset.crossFilter;
+      const target = ({ departamento: '#department-filter', estado: '#status-filter', evento: '#event-filter' })[type];
+      if (!target) return;
+      const select = $(target);
+      const value = selectedFilter(type).toUpperCase() === control.dataset.crossValue.toUpperCase()
+        ? '' : control.dataset.crossValue;
+      select.value = [...select.options].some((option) => option.value === value) ? value : '';
+      if (type === 'departamento') {
+        state.selectedDepartment = select.value;
+        const mapOption = [...$('#map-department').options].find((option) =>
+          normalizeArea(option.value) === normalizeArea(state.selectedDepartment));
+        $('#map-department').value = mapOption?.value || '';
+      }
+      state.page = 0;
+      refreshDashboard().catch((error) => showNotice(`No se pudo aplicar la selección. ${error.message}`));
+    });
+    document.addEventListener('keydown', (event) => {
+      const card = event.target.closest('.kpi-card[data-cross-filter]');
+      if (card && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        card.click();
+      }
     });
     $('#search-text').addEventListener('input', () => {
       window.clearTimeout(state.debounce);

@@ -56,3 +56,10 @@ El CSV contiene texto libre extenso en `HECHOS` y `NOVEDADES`. Para una primera 
 - El CSV documenta emergencias y afectaciones viales, no un mapa oficial de peligros futuros.
 - No incluye nivel socioeconómico ni número de residentes afectados como variables estructuradas.
 - No crear un `nivel_riesgo` que se presente como oficial. Si se define una puntuación del proyecto, especificar sus reglas y llamarla indicador de priorización.
+
+## Límites departamentales del mapa
+
+- **Fuente cartográfica:** [Instituto Geográfico Nacional (IGN), capa de Límites Departamentales](https://www.datosabiertos.gob.pe/dataset/limites-departamentales), publicada en el servicio cartográfico del [GeoServidor del MINAM](https://geoservidorperu.minam.gob.pe/arcgis/rest/services/ServicioCFOI/MapServer/15).
+- **Escala referencial:** 1:100 000. Los límites se usan para orientar el mapa y permitir la selección de departamentos; no son límites político-administrativos para trámites ni decisiones legales.
+- **Archivo web:** `hexagonal-spring/src/main/resources/static/data/peru-departamentos.geojson`, convertido a GeoJSON WGS84 y simplificado para carga en navegador.
+- **Atribución:** IGN / MINAM. Los puntos del MTC se dibujan sobre esta referencia cartográfica; seleccionar un departamento solo filtra los reportes de esta aplicación.

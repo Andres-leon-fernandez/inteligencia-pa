@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import pe.inteligenciapa.adapter.in.rest.dto.IndicadorItemResponse;
 import pe.inteligenciapa.adapter.in.rest.dto.ResumenIndicadoresResponse;
+import pe.inteligenciapa.application.model.FiltroIndicadores;
 import pe.inteligenciapa.application.model.ResumenIndicadores;
 import pe.inteligenciapa.application.port.in.ConsultarIndicadoresUseCase;
 
@@ -23,8 +24,12 @@ public class IndicadoresController {
     @GetMapping("/resumen")
     public ResumenIndicadoresResponse resumen(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
-        ResumenIndicadores resumen = consultarIndicadores.consultarResumen(desde, hasta);
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @RequestParam(required = false) String departamento,
+            @RequestParam(required = false) String estado,
+            @RequestParam(required = false) String evento) {
+        ResumenIndicadores resumen = consultarIndicadores.consultarResumen(
+                new FiltroIndicadores(desde, hasta, departamento, estado, evento));
         return new ResumenIndicadoresResponse(
                 resumen.desde(),
                 resumen.hasta(),

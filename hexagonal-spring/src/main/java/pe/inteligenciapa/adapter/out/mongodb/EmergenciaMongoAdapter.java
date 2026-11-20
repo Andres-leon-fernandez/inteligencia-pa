@@ -20,6 +20,7 @@ import org.springframework.stereotype.Repository;
 import pe.inteligenciapa.adapter.out.mongodb.document.EmergenciaMongoDocument;
 import pe.inteligenciapa.adapter.out.mongodb.mapper.EmergenciaMongoMapper;
 import pe.inteligenciapa.application.model.FiltroEmergencias;
+import pe.inteligenciapa.application.model.FiltroIndicadores;
 import pe.inteligenciapa.application.model.IndicadorItem;
 import pe.inteligenciapa.application.model.PaginaResultado;
 import pe.inteligenciapa.application.model.ResumenIndicadores;
@@ -69,8 +70,11 @@ public class EmergenciaMongoAdapter implements EmergenciaVialQueryPort, Indicado
     }
 
     @Override
-    public ResumenIndicadores consultarResumen(LocalDate desde, LocalDate hasta) {
-        List<Criteria> condiciones = criteriosFechas(desde, hasta);
+    public ResumenIndicadores consultarResumen(FiltroIndicadores filtro) {
+        List<Criteria> condiciones = criteriosFechas(filtro.desde(), filtro.hasta());
+        agregarTexto(condiciones, "departamento", filtro.departamento());
+        agregarTexto(condiciones, "estado_actual", filtro.estado());
+        agregarTexto(condiciones, "evento", filtro.evento());
         Query query = crearConsulta(condiciones);
         long total = mongoTemplate.count(query, EmergenciaMongoDocument.class);
         Criteria conFecha = Criteria.where("fecha_ocurrencia").ne(null);
@@ -82,8 +86,8 @@ public class EmergenciaMongoAdapter implements EmergenciaVialQueryPort, Indicado
                 EmergenciaMongoDocument.class, EmergenciaMongoDocument.COLLECTION);
 
         return new ResumenIndicadores(
-                desde,
-                hasta,
+                filtro.desde(),
+                filtro.hasta(),
                 aFechaLocal(primera),
                 aFechaLocal(ultima),
                 total,
