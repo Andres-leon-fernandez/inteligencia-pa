@@ -1,5 +1,6 @@
 package pe.inteligenciapa.domain.model;
 
+/** Par geográfico opcional; valida rangos y exige que ambas coordenadas vengan juntas. */
 public record Coordenadas(Double latitud, Double longitud) {
     public Coordenadas {
         if ((latitud == null) != (longitud == null)) {

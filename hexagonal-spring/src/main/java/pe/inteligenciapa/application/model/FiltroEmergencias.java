@@ -2,6 +2,7 @@ package pe.inteligenciapa.application.model;
 
 import java.time.LocalDate;
 
+/** Criterios de búsqueda y paginación que recibe el caso de uso de consulta. */
 public record FiltroEmergencias(
         String departamento,
         String provincia,

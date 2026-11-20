@@ -8,6 +8,7 @@ import pe.inteligenciapa.domain.model.Coordenadas;
 import pe.inteligenciapa.domain.model.EmergenciaVial;
 import pe.inteligenciapa.domain.model.UbicacionVial;
 
+/** Convierte el modelo de persistencia en el modelo de dominio y normaliza fechas a UTC. */
 public final class EmergenciaMongoMapper {
     private EmergenciaMongoMapper() {
     }

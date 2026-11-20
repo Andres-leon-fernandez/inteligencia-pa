@@ -5,6 +5,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
+/** Esquema persistido en Mongo; sus nombres snake_case corresponden a la colección importada. */
 @Document(collection = EmergenciaMongoDocument.COLLECTION)
 public record EmergenciaMongoDocument(
         @Id String mongoId,

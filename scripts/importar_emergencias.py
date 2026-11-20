@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Limpia el CSV público del MTC y hace upsert de sus filas en MongoDB."""
+"""Valida, normaliza e importa el CSV de emergencias viales del MTC.
+
+Flujo: leer CSV (cp1252 y ';'), revisar columnas e IDs, convertir tipos y
+hacer upsert por id_emergencia. ``--dry-run`` realiza las validaciones sin
+conectarse a MongoDB. La URI proviene de MONGODB_URI o --mongo-uri.
+"""
 
 from __future__ import annotations
 
@@ -52,6 +57,7 @@ DATE_FORMATS = {
 
 
 def parse_date(value: str, source_field: str) -> datetime | None:
+    """Convierte la fecha original del campo MTC a medianoche UTC; vacío queda None."""
     cleaned = value.strip()
     if not cleaned:
         return None
@@ -60,6 +66,7 @@ def parse_date(value: str, source_field: str) -> datetime | None:
 
 
 def clean_text(value: str | None) -> str | None:
+    """Colapsa espacios y saltos de línea para almacenar texto legible o None."""
     if value is None:
         return None
     cleaned = re.sub(r"\s+", " ", value).strip()
@@ -67,6 +74,7 @@ def clean_text(value: str | None) -> str | None:
 
 
 def parse_coordinate(value: str, field: str, line_number: int) -> float | None:
+    """Convierte y valida latitud/longitud; el error incluye fila y campo fuente."""
     cleaned = value.strip()
     if not cleaned:
         return None
@@ -81,6 +89,7 @@ def parse_coordinate(value: str, field: str, line_number: int) -> float | None:
 
 
 def clean_record(raw: dict[str, str], line_number: int) -> dict[str, Any]:
+    """Transforma una fila del CSV al esquema de documento que usa MongoDB."""
     record: dict[str, Any] = {}
     for source_field, target_field in FIELD_MAP.items():
         value = raw.get(source_field, "")
@@ -102,6 +111,7 @@ def clean_record(raw: dict[str, str], line_number: int) -> dict[str, Any]:
 
 
 def load_records(csv_path: Path) -> list[dict[str, Any]]:
+    """Carga filas y rechaza encabezados faltantes, IDs vacíos o IDs duplicados."""
     records: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     with csv_path.open("r", encoding="cp1252", newline="") as csv_file:
@@ -124,6 +134,7 @@ def load_records(csv_path: Path) -> list[dict[str, Any]]:
 
 
 def parse_args() -> argparse.Namespace:
+    """Declara las opciones de línea de comandos y sus valores predeterminados."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", type=Path, default=DEFAULT_CSV, help="Ruta al CSV del MTC")
     parser.add_argument("--mongo-uri", default=os.getenv("MONGODB_URI"), help="URI MongoDB; también puede definirse en MONGODB_URI")
@@ -134,6 +145,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Coordina validación, dry-run o importación y devuelve el código de salida CLI."""
     args = parse_args()
     csv_path = args.csv.expanduser().resolve()
     if not csv_path.is_file():

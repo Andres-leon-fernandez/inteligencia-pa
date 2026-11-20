@@ -2,6 +2,7 @@ package pe.inteligenciapa.domain.model;
 
 import java.time.LocalDate;
 
+/** Reporte vial del dominio; no depende del formato de Mongo ni del JSON REST. */
 public record EmergenciaVial(
         String idEmergencia,
         String codigoReporte,
